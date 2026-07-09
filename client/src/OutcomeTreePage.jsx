@@ -217,7 +217,14 @@ function OutcomeTreePage()
 
             const pis = await response.json();
 
-            navigate('/pis', { state: { pis, outcome_code: selected_outcome.code } });
+            navigate('/pis', {
+                state:
+                {
+                    pis,
+                    outcome_code: selected_outcome.code,
+                    outcome_id: selected_outcome_id
+                }
+            });
         }
         catch (error)
         {
