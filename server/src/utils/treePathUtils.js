@@ -31,7 +31,7 @@
 //         }));
 // }
 
-// module.exports = { getSelectedNodesWithPaths };
+// export { getSelectedNodesWithPaths };
 
 function toPlainNode(node)
 {
@@ -84,4 +84,4 @@ function getSelectedNodesWithSubtrees(trees, selected_node_ids)
         }));
 }
 
-module.exports = { getSelectedNodesWithSubtrees };
+export { getSelectedNodesWithSubtrees };

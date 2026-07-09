@@ -1,7 +1,6 @@
 //this is a test file, you can delete it later
 
-
-const { normalizeSiblings } = require('./utils/treeUtils');
+import { normalizeSiblings } from './utils/treeUtils.js';
 
 const trees =
 [

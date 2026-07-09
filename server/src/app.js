@@ -1,6 +1,8 @@
-const express = require('express');
-const cors = require('cors');
-const outcomeRoutes = require('./routes/outcomeRoutes');
+import express from 'express';
+import cors from 'cors';
+import outcomeRoutes from './routes/outcomeRoutes.js';
+import leafMappingRoutes from './routes/leafMappingRoutes.js';
+
 
 const app = express();
 
@@ -13,5 +15,6 @@ app.get('/api/health', (req, res) =>
 });
 
 app.use('/api/outcomes', outcomeRoutes);
+app.use('/api', leafMappingRoutes);
 
-module.exports = app;
+export default app;

@@ -1,7 +1,7 @@
-const Outcome = require('../models/Outcome');
-const { generatePIsFromNodes } = require('../services/geminiService');
-const { getSelectedNodesWithSubtrees } = require('../utils/treePathUtils');
-const { normalizeSiblings } = require('../utils/treeUtils');
+import Outcome from '../models/Outcome.js';
+import { generatePIsFromNodes } from '../services/geminiService.js';
+import { getSelectedNodesWithSubtrees } from '../utils/treePathUtils.js';
+import { normalizeSiblings } from '../utils/treeUtils.js';
 
 async function saveTrees(req, res)
 {
@@ -144,4 +144,4 @@ async function generatePIs(req, res)
     }
 }
 
-module.exports = { getAllOutcomes, createOutcome, getOutcomeById, generatePIs, saveTrees };
+export { getAllOutcomes, createOutcome, getOutcomeById, generatePIs, saveTrees };

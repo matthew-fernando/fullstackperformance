@@ -17,4 +17,4 @@ function normalizeSiblings(nodes, total_weight)
     });
 }
 
-module.exports = { normalizeSiblings };
+export { normalizeSiblings };

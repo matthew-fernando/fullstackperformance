@@ -104,7 +104,7 @@ function TreeNodeComponent({ id, data })
     );
 }
 
-function nodeStyle(type)
+export function treeNodeStyle(type)
 {
     return {
         padding: 14,
@@ -117,6 +117,11 @@ function nodeStyle(type)
         color: '#f1f5f9',
         boxSizing: 'border-box'
     };
+}
+
+function nodeStyle(type)
+{
+    return treeNodeStyle(type);
 }
 
 const inputStyle =

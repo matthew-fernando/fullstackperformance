@@ -1,6 +1,6 @@
-require('dotenv').config();
-const mongoose = require('mongoose');
-const Outcome = require('./models/Outcome');
+import 'dotenv/config';
+import mongoose from 'mongoose';
+import Outcome from './models/Outcome.js';
 
 const abetOutcomes =
 [

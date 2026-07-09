@@ -1,4 +1,4 @@
-const { GoogleGenAI } = require('@google/genai');
+import { GoogleGenAI } from '@google/genai';
 
 const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -72,4 +72,4 @@ Return ONLY a JSON array, no markdown formatting, no preamble, in this exact sha
 Number the codes sequentially starting from 1 in the order given, using the format "PI ${outcome_number}.N".`;
 }
 
-module.exports = { generatePIsFromNodes };
+export { generatePIsFromNodes };

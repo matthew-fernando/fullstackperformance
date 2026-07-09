@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const treeNodeSchema = new mongoose.Schema(
 {
@@ -77,4 +77,4 @@ const outcomeSchema = new mongoose.Schema(
 
 const Outcome = mongoose.model('Outcome', outcomeSchema);
 
-module.exports = Outcome;
+export default Outcome;
