@@ -1,19 +1,65 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, ClipboardList } from 'lucide-react';
 
 function PIReviewPage()
 {
     const location = useLocation();
     const navigate = useNavigate();
 
-    const initial_pis = location.state?.pis ?? [];
-    const outcome_code = location.state?.outcome_code ?? '';
-    const outcome_id = location.state?.outcome_id ?? null;
-    const [pis, setPis] = useState(initial_pis);
+    const [outcomes, setOutcomes] = useState([]);
+    const [selected_outcome_id, setSelectedOutcomeId] = useState(location.state?.outcome_id ?? '');
+    const [pis, setPis] = useState(location.state?.pis ?? []);
+    const [loading_pis, setLoadingPis] = useState(false);
     const [saving, setSaving] = useState(false);
     const [save_error, setSaveError] = useState(null);
     const [saved, setSaved] = useState(false);
+
+    useEffect(() =>
+    {
+        fetch('http://localhost:5001/api/outcomes')
+            .then(response => response.json())
+            .then(data => setOutcomes(data))
+            .catch(error => console.error('Error fetching outcomes:', error));
+    }, []);
+
+    useEffect(() =>
+    {
+        if (location.state?.pis)
+        {
+            return;
+        }
+
+        if (!selected_outcome_id)
+        {
+            setPis([]);
+            return;
+        }
+
+        setLoadingPis(true);
+        setSaved(false);
+
+        fetch(`http://localhost:5001/api/performance-indicators/outcome/${selected_outcome_id}`)
+            .then(response => response.json())
+            .then(data => setPis(data))
+            .catch(error => console.error('Error fetching PIs:', error))
+            .finally(() => setLoadingPis(false));
+    }, [selected_outcome_id]);
+
+    const selected_outcome = outcomes.find(outcome => outcome._id === selected_outcome_id);
+
+    function autoResizeTextarea(element)
+    {
+        if (!element) return;
+        element.style.height = 'auto';
+        element.style.height = `${element.scrollHeight}px`;
+    }
+    
+    function handleOutcomeChange(new_outcome_id)
+    {
+        setSelectedOutcomeId(new_outcome_id);
+        setSaveError(null);
+    }
 
     function handleTitleChange(index, new_title)
     {
@@ -33,9 +79,9 @@ function PIReviewPage()
 
     async function handleSaveAll()
     {
-        if (!outcome_id)
+        if (!selected_outcome_id)
         {
-            setSaveError('Missing outcome_id — cannot save.');
+            setSaveError('Select an outcome first.');
             return;
         }
 
@@ -48,7 +94,7 @@ function PIReviewPage()
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ outcome_id, pis })
+                body: JSON.stringify({ outcome_id: selected_outcome_id, pis })
             });
 
             if (!response.ok)
@@ -69,16 +115,16 @@ function PIReviewPage()
         }
     }
 
-    if (initial_pis.length === 0)
+    function handleGoToRubric()
     {
-        return (
-            <div style={{ padding: 24 }}>
-                <p>No generated PIs to show. Go back and select nodes to generate from.</p>
-                <button onClick={() => navigate('/')} style={backButtonStyle}>
-                    <ArrowLeft size={14} /> Back to tree editor
-                </button>
-            </div>
-        );
+        navigate('/rubric',
+        {
+            state:
+            {
+                outcome_id: selected_outcome_id,
+                outcome_code: selected_outcome?.code ?? ''
+            }
+        });
     }
 
     return (
@@ -88,21 +134,48 @@ function PIReviewPage()
                     <ArrowLeft size={14} /> Back to tree editor
                 </button>
 
-                <button onClick={handleSaveAll} disabled={saving} style={saveButtonStyle}>
-                    <Save size={14} /> {saving ? 'Saving...' : 'Save All'}
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                    {pis.length > 0 && (
+                        <button onClick={handleGoToRubric} disabled={!selected_outcome_id} style={rubricButtonStyle}>
+                            <ClipboardList size={14} /> Outcome Rubric
+                        </button>
+                    )}
+
+                    <button onClick={handleSaveAll} disabled={saving || pis.length === 0} style={saveButtonStyle}>
+                        <Save size={14} /> {saving ? 'Saving...' : 'Save All'}
+                    </button>
+                </div>
             </div>
 
-            <h2 style={{ marginTop: 16 }}>Generated Performance Indicators — {outcome_code}</h2>
+            <h2 style={{ marginTop: 16 }}>Performance Indicators</h2>
+
+            <select
+                value={selected_outcome_id}
+                onChange={(event) => handleOutcomeChange(event.target.value)}
+                style={selectStyle}
+            >
+                <option value="">Select an outcome...</option>
+                {outcomes.map(outcome => (
+                    <option key={outcome._id} value={outcome._id}>
+                        {outcome.code}
+                    </option>
+                ))}
+            </select>
+
             <p style={{ color: '#64748b', marginBottom: 8 }}>
                 Review and edit each PI below before finalizing.
             </p>
 
             {save_error && <p style={{ color: '#dc2626', marginBottom: 16 }}>{save_error}</p>}
             {saved && !save_error && <p style={{ color: '#16a34a', marginBottom: 16 }}>Saved successfully.</p>}
+            {loading_pis && <p style={{ color: '#64748b' }}>Loading PIs...</p>}
+
+            {!loading_pis && selected_outcome_id && pis.length === 0 && (
+                <p style={{ color: '#64748b' }}>No PIs exist for this outcome yet. Generate some from the tree editor first.</p>
+            )}
 
             {pis.map((pi, index) => (
-                <div key={pi.node_id ?? index} style={cardStyle}>
+                <div key={pi._id ?? pi.node_id ?? index} style={cardStyle}>
                     <input
                         type="text"
                         value={pi.code}
@@ -110,10 +183,14 @@ function PIReviewPage()
                         style={codeInputStyle}
                     />
                     <textarea
+                        ref={autoResizeTextarea}
                         value={pi.title}
-                        onChange={(event) => handleTitleChange(index, event.target.value)}
+                        onChange={(event) =>
+                        {
+                            handleTitleChange(index, event.target.value);
+                            autoResizeTextarea(event.target);
+                        }}
                         style={titleInputStyle}
-                        rows={2}
                     />
                 </div>
             ))}
@@ -128,8 +205,9 @@ const backButtonStyle =
     gap: 6,
     padding: '6px 12px',
     borderRadius: 6,
-    border: '1px solid #e2e8f0',
+    border: '1px solid #1e3a5f',
     background: '#fff',
+    color: '#1e3a5f',
     cursor: 'pointer',
     fontSize: 13
 };
@@ -148,9 +226,35 @@ const saveButtonStyle =
     fontSize: 13
 };
 
+const rubricButtonStyle =
+{
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '6px 12px',
+    borderRadius: 6,
+    border: '1px solid #1e3a5f',
+    background: '#fff',
+    color: '#1e3a5f',
+    cursor: 'pointer',
+    fontSize: 13
+};
+
+const selectStyle =
+{
+    padding: 8,
+    borderRadius: 6,
+    border: '1px solid #1e3a5f',
+    color: '#1e3a5f',
+    marginBottom: 12,
+    width: '100%',
+    fontSize: 14,
+    background: '#fff'
+};
+
 const cardStyle =
 {
-    border: '1px solid #e2e8f0',
+    border: '1px solid #1e3a5f',
     borderRadius: 8,
     padding: 16,
     marginBottom: 12,
@@ -165,19 +269,22 @@ const codeInputStyle =
     color: '#1e3a5f',
     marginBottom: 8,
     width: '100%',
-    outline: 'none'
+    outline: 'none',
+    background: '#fff'
 };
 
 const titleInputStyle =
 {
-    border: '1px solid #e2e8f0',
+    border: '1px solid #1e3a5f',
     borderRadius: 6,
     padding: 8,
     width: '100%',
     fontSize: 14,
     resize: 'none',
     boxSizing: 'border-box',
-    fontFamily: 'inherit'
+    fontFamily: 'inherit',
+    color: '#1e3a5f',
+    background: '#fff'
 };
 
 export default PIReviewPage;
