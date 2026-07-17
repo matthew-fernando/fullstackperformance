@@ -19,8 +19,9 @@ function countChildren(node_array, id_to_count_map)
 
 function AssignmentsPage()
 {
-	const [rubrics, setRubrics] = useState([]);
-	const [selectedRubricId, setSelectedRubricId] = useState(null);
+	const [assignments, setAssignments] = useState([]);
+	const [selectedAssignmentId, setSelectedAssignmentId] = useState(null);
+	const [selectedQuestionId, setSelectedQuestionId] = useState(null);
 	const [outcomes, setOutcomes] = useState([]);
 	const [selectedOutcomeId, setSelectedOutcomeId] = useState('');
 	const [trees, setTrees] = useState([]);
@@ -34,11 +35,10 @@ function AssignmentsPage()
 
 	useEffect(() =>
 	{
-		fetch(`${API_BASE}/rubrics`).then((res) => res.json()).then(setRubrics);
+		fetch(`${API_BASE}/assignments`).then((res) => res.json()).then(setAssignments);
 		fetch(`${API_BASE}/outcomes`).then((res) => res.json()).then(setOutcomes);
 	}, []);
-	
-	
+
 	useEffect(() =>
 	{
 		if (!selectedOutcomeId)
@@ -57,7 +57,7 @@ function AssignmentsPage()
 
 	useEffect(() =>
 	{
-		if (!selectedOutcomeId || !selectedRubricId)
+		if (!selectedOutcomeId || !selectedQuestionId)
 		{
 			setLinkedMap(new Map());
 			setInitialLeafIds(new Set());
@@ -69,7 +69,7 @@ function AssignmentsPage()
 			.then((res) => res.json())
 			.then((mappings) =>
 			{
-				const relevant = mappings.filter((m) => m.rubric_id._id === selectedRubricId);
+				const relevant = mappings.filter((m) => String(m.question_id) === selectedQuestionId);
 				const node_ids = relevant.map((m) => m.node_id);
 				const map = new Map(relevant.map((m) => [m.node_id, m._id]));
 
@@ -77,7 +77,7 @@ function AssignmentsPage()
 				setInitialLeafIds(new Set(node_ids));
 				setSelectedLeafIds(new Set(node_ids));
 			});
-	}, [selectedOutcomeId, selectedRubricId]);
+	}, [selectedOutcomeId, selectedQuestionId]);
 
 	const toggleLeaf = useCallback((node_id) =>
 	{
@@ -127,24 +127,25 @@ function AssignmentsPage()
 		rebuildFlow(trees, selectedLeafIds);
 	}, [trees, selectedLeafIds, toggleLeaf]);
 
-	function handleSelectRubric(rubric_id)
+	function handleSelectQuestion(assignment_id, question_id)
 	{
-		setSelectedRubricId(rubric_id);
+		setSelectedAssignmentId(assignment_id);
+		setSelectedQuestionId(question_id);
 		setSaveStatus('');
 	}
 
-	function toggleAssignment(assignment)
+	function toggleAssignment(assignment_id)
 	{
 		setExpandedAssignments((prev) =>
 		{
 			const next = new Set(prev);
-			if (next.has(assignment))
+			if (next.has(assignment_id))
 			{
-				next.delete(assignment);
+				next.delete(assignment_id);
 			}
 			else
 			{
-				next.add(assignment);
+				next.add(assignment_id);
 			}
 			return next;
 		});
@@ -152,7 +153,7 @@ function AssignmentsPage()
 
 	async function handleSave()
 	{
-		if (!selectedRubricId || !selectedOutcomeId)
+		if (!selectedQuestionId || !selectedAssignmentId || !selectedOutcomeId)
 		{
 			return;
 		}
@@ -167,7 +168,12 @@ function AssignmentsPage()
 				fetch(`${API_BASE}/leaf-mappings`, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ outcome_id: selectedOutcomeId, node_id, rubric_id: selectedRubricId })
+					body: JSON.stringify({
+						outcome_id: selectedOutcomeId,
+						node_id,
+						assignment_id: selectedAssignmentId,
+						question_id: selectedQuestionId
+					})
 				})
 			)
 		);
@@ -196,27 +202,17 @@ function AssignmentsPage()
 		}
 	}
 
-	const grouped = rubrics.reduce((acc, rubric) =>
-	{
-		if (!acc[rubric.assignment])
-		{
-			acc[rubric.assignment] = [];
-		}
-		acc[rubric.assignment].push(rubric);
-		return acc;
-	}, {});
-
 	return (
 		<div style={{ display: 'flex', height: '100vh' }}>
 			<div style={{ width: 260, borderRight: '1px solid #ddd', overflowY: 'auto', padding: 12 }}>
-				{Object.entries(grouped).map(([assignment, questions]) => {
-					const is_expanded = expandedAssignments.has(assignment);
+				{assignments.map((assignment) => {
+					const is_expanded = expandedAssignments.has(assignment._id);
 
 					return (
-						<div key={assignment} style={{ marginBottom: 8 }}>
+						<div key={assignment._id} style={{ marginBottom: 8 }}>
 							<button
 								type="button"
-								onClick={() => toggleAssignment(assignment)}
+								onClick={() => toggleAssignment(assignment._id)}
 								style={{
 									display: 'flex',
 									alignItems: 'center',
@@ -233,25 +229,25 @@ function AssignmentsPage()
 									textAlign: 'left'
 								}}
 							>
-								<span>{assignment}</span>
+								<span>{assignment.name}</span>
 								<span style={{ fontSize: 11, color: 'var(--text)' }}>{is_expanded ? '▾' : '▸'}</span>
 							</button>
 
 							{is_expanded && (
 								<div style={{ marginTop: 4, paddingLeft: 8 }}>
-									{questions.map((q) => (
+									{assignment.questions.map((q) => (
 										<div
 											key={q._id}
-											onClick={() => handleSelectRubric(q._id)}
+											onClick={() => handleSelectQuestion(assignment._id, q._id)}
 											style={{
 												padding: '4px 8px',
 												cursor: 'pointer',
 												color: 'var(--text-h)',
-												background: selectedRubricId === q._id ? 'var(--accent-bg)' : 'transparent',
+												background: selectedQuestionId === q._id ? 'var(--accent-bg)' : 'transparent',
 												borderRadius: 4
 											}}
 										>
-											{q.question_id}
+											{q.question_label}
 										</div>
 									))}
 								</div>
@@ -270,7 +266,7 @@ function AssignmentsPage()
 						))}
 					</select>
 
-					<button onClick={handleSave} disabled={!selectedRubricId || !selectedOutcomeId}>
+					<button onClick={handleSave} disabled={!selectedQuestionId || !selectedOutcomeId}>
 						Save
 					</button>
 

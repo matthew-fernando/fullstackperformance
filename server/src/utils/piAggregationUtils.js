@@ -1,4 +1,5 @@
 import LeafMapping from '../models/LeafMapping.js';
+import Assignment from '../models/Assignment.js';
 
 function toPlainNode(node)
 {
@@ -50,12 +51,13 @@ function buildLeafContext(leaf_node, mappings_by_node_id)
 
     const questions = mappings.map(mapping =>
     {
-        const rubric = mapping.rubric_id;
+        const assignment = mapping.assignment_id;
+        const question = assignment.questions.find(q => q._id.toString() === mapping.question_id.toString());
 
         return {
-            assignment: rubric.assignment,
-            question_id: rubric.question_id,
-            criteria: rubric.criteria
+            assignment: assignment.name,
+            question_id: question ? question.question_label : '(unknown)',
+            criteria: question ? question.criteria : []
         };
     });
 
@@ -97,7 +99,7 @@ async function buildOutcomeRubricContext(outcome, pis)
 {
     const mappings = await LeafMapping
         .find({ outcome_id: outcome._id })
-        .populate('rubric_id');
+        .populate('assignment_id');
 
     const mappings_by_node_id = new Map();
 

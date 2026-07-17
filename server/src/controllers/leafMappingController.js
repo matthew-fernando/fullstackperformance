@@ -1,30 +1,30 @@
 import LeafMapping from "../models/LeafMapping.js";
-import Rubric from "../models/Rubric.js";
+import Assignment from "../models/Assignment.js";
 
-async function getRubrics(req, res)
+async function getAssignments(req, res)
 {
-	const rubrics = await Rubric.find({});
-	res.json(rubrics);
+	const assignments = await Assignment.find({});
+	res.json(assignments);
 }
 
 async function getMappingsForOutcome(req, res)
 {
-	const mappings = await LeafMapping.find({ outcome_id: req.params.outcome_id }).populate("rubric_id");
+	const mappings = await LeafMapping.find({ outcome_id: req.params.outcome_id }).populate("assignment_id");
 	res.json(mappings);
 }
 
 async function createMapping(req, res)
 {
-	const { outcome_id, node_id, rubric_id } = req.body;
+	const { outcome_id, node_id, assignment_id, question_id } = req.body;
 
-	if (!outcome_id || !node_id || !rubric_id)
+	if (!outcome_id || !node_id || !assignment_id || !question_id)
 	{
-		return res.status(400).json({ error: "outcome_id, node_id, and rubric_id are required" });
+		return res.status(400).json({ error: "outcome_id, node_id, assignment_id, and question_id are required" });
 	}
 
 	try
 	{
-		const mapping = await LeafMapping.create({ outcome_id, node_id, rubric_id });
+		const mapping = await LeafMapping.create({ outcome_id, node_id, assignment_id, question_id });
 		res.status(201).json(mapping);
 	}
 	catch (err)
@@ -43,4 +43,4 @@ async function deleteMapping(req, res)
 	res.status(204).send();
 }
 
-export { getRubrics, getMappingsForOutcome, createMapping, deleteMapping };
+export { getAssignments, getMappingsForOutcome, createMapping, deleteMapping };
