@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useParams } from 'react-router-dom';
 import { ReactFlow, Background, Controls, useNodesState, useEdgesState } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { treesToFlow } from './treeFlowUtils.js';
@@ -19,10 +20,12 @@ function countChildren(node_array, id_to_count_map)
 
 function AssignmentsPage()
 {
+	const { classId } = useParams();
+
 	const [assignments, setAssignments] = useState([]);
 	const [selectedAssignmentId, setSelectedAssignmentId] = useState(null);
 	const [selectedQuestionId, setSelectedQuestionId] = useState(null);
-	const [outcomes, setOutcomes] = useState([]);
+	const [classDoc, setClassDoc] = useState(null);
 	const [selectedOutcomeId, setSelectedOutcomeId] = useState('');
 	const [trees, setTrees] = useState([]);
 	const [selectedLeafIds, setSelectedLeafIds] = useState(new Set());
@@ -35,25 +38,17 @@ function AssignmentsPage()
 
 	useEffect(() =>
 	{
-		fetch(`${API_BASE}/assignments`).then((res) => res.json()).then(setAssignments);
-		fetch(`${API_BASE}/outcomes`).then((res) => res.json()).then(setOutcomes);
-	}, []);
+		fetch(`${API_BASE}/assignments?class_id=${classId}`).then((res) => res.json()).then(setAssignments);
+		fetch(`${API_BASE}/classes/${classId}`).then((res) => res.json()).then(setClassDoc);
+	}, [classId]);
+
+	const outcomeEntries = classDoc?.outcomes ?? [];
 
 	useEffect(() =>
 	{
-		if (!selectedOutcomeId)
-		{
-			setTrees([]);
-			return;
-		}
-
-		fetch(`${API_BASE}/outcomes/${selectedOutcomeId}`)
-			.then((res) => res.json())
-			.then((outcome) =>
-			{
-				setTrees(outcome.trees);
-			});
-	}, [selectedOutcomeId]);
+		const entry = outcomeEntries.find((o) => o.outcome_id._id === selectedOutcomeId);
+		setTrees(entry ? entry.trees : []);
+	}, [selectedOutcomeId, classDoc]);
 
 	useEffect(() =>
 	{
@@ -65,7 +60,7 @@ function AssignmentsPage()
 			return;
 		}
 
-		fetch(`${API_BASE}/outcomes/${selectedOutcomeId}/leaf-mappings`)
+		fetch(`${API_BASE}/classes/${classId}/outcomes/${selectedOutcomeId}/leaf-mappings`)
 			.then((res) => res.json())
 			.then((mappings) =>
 			{
@@ -77,7 +72,7 @@ function AssignmentsPage()
 				setInitialLeafIds(new Set(node_ids));
 				setSelectedLeafIds(new Set(node_ids));
 			});
-	}, [selectedOutcomeId, selectedQuestionId]);
+	}, [classId, selectedOutcomeId, selectedQuestionId]);
 
 	const toggleLeaf = useCallback((node_id) =>
 	{
@@ -169,6 +164,7 @@ function AssignmentsPage()
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
+						class_id: classId,
 						outcome_id: selectedOutcomeId,
 						node_id,
 						assignment_id: selectedAssignmentId,
@@ -261,8 +257,8 @@ function AssignmentsPage()
 				<div style={{ padding: 12, borderBottom: '1px solid #ddd', display: 'flex', gap: 12, alignItems: 'center' }}>
 					<select value={selectedOutcomeId} onChange={(e) => setSelectedOutcomeId(e.target.value)}>
 						<option value="">Select outcome...</option>
-						{outcomes.map((o) => (
-							<option key={o._id} value={o._id}>{o.code}</option>
+						{outcomeEntries.map((entry) => (
+							<option key={entry.outcome_id._id} value={entry.outcome_id._id}>{entry.outcome_id.code}</option>
 						))}
 					</select>
 

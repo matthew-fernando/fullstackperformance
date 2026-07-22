@@ -95,10 +95,10 @@ function buildPIContext(trees, pi, mappings_by_node_id)
     };
 }
 
-async function buildOutcomeRubricContext(outcome, pis)
+async function buildOutcomeRubricContext(class_id, outcome_id, trees, pis)
 {
     const mappings = await LeafMapping
-        .find({ outcome_id: outcome._id })
+        .find({ class_id, outcome_id })
         .populate('assignment_id');
 
     const mappings_by_node_id = new Map();
@@ -111,7 +111,7 @@ async function buildOutcomeRubricContext(outcome, pis)
         mappings_by_node_id.set(key, existing);
     }
 
-    return pis.map(pi => buildPIContext(outcome.trees, pi, mappings_by_node_id));
+    return pis.map(pi => buildPIContext(trees, pi, mappings_by_node_id));
 }
 
 export { findNodeById, collectLeafDescendants, buildPIContext, buildOutcomeRubricContext };

@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save, ClipboardList } from 'lucide-react';
 
 function PIReviewPage()
 {
     const location = useLocation();
     const navigate = useNavigate();
+    const { classId } = useParams();
 
-    const [outcomes, setOutcomes] = useState([]);
+    const [class_doc, setClassDoc] = useState(null);
     const [selected_outcome_id, setSelectedOutcomeId] = useState(location.state?.outcome_id ?? '');
     const [pis, setPis] = useState(location.state?.pis ?? []);
     const [loading_pis, setLoadingPis] = useState(false);
@@ -17,11 +18,11 @@ function PIReviewPage()
 
     useEffect(() =>
     {
-        fetch('http://localhost:5001/api/outcomes')
+        fetch(`http://localhost:5001/api/classes/${classId}`)
             .then(response => response.json())
-            .then(data => setOutcomes(data))
-            .catch(error => console.error('Error fetching outcomes:', error));
-    }, []);
+            .then(data => setClassDoc(data))
+            .catch(error => console.error('Error fetching class:', error));
+    }, [classId]);
 
     useEffect(() =>
     {
@@ -39,14 +40,15 @@ function PIReviewPage()
         setLoadingPis(true);
         setSaved(false);
 
-        fetch(`http://localhost:5001/api/performance-indicators/outcome/${selected_outcome_id}`)
+        fetch(`http://localhost:5001/api/performance-indicators/class/${classId}/outcome/${selected_outcome_id}`)
             .then(response => response.json())
             .then(data => setPis(data))
             .catch(error => console.error('Error fetching PIs:', error))
             .finally(() => setLoadingPis(false));
-    }, [selected_outcome_id]);
+    }, [classId, selected_outcome_id]);
 
-    const selected_outcome = outcomes.find(outcome => outcome._id === selected_outcome_id);
+    const outcome_entries = class_doc?.outcomes ?? [];
+    const selected_entry = outcome_entries.find(entry => entry.outcome_id._id === selected_outcome_id);
 
     function autoResizeTextarea(element)
     {
@@ -54,7 +56,7 @@ function PIReviewPage()
         element.style.height = 'auto';
         element.style.height = `${element.scrollHeight}px`;
     }
-    
+
     function handleOutcomeChange(new_outcome_id)
     {
         setSelectedOutcomeId(new_outcome_id);
@@ -94,7 +96,7 @@ function PIReviewPage()
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ outcome_id: selected_outcome_id, pis })
+                body: JSON.stringify({ class_id: classId, outcome_id: selected_outcome_id, pis })
             });
 
             if (!response.ok)
@@ -117,12 +119,11 @@ function PIReviewPage()
 
     function handleGoToRubric()
     {
-        navigate('/rubric',
-        {
+        navigate(`/classes/${classId}/rubric`, {
             state:
             {
                 outcome_id: selected_outcome_id,
-                outcome_code: selected_outcome?.code ?? ''
+                outcome_code: selected_entry?.outcome_id.code ?? ''
             }
         });
     }
@@ -130,7 +131,7 @@ function PIReviewPage()
     return (
         <div style={{ padding: 24, maxWidth: 800, margin: '0 auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <button onClick={() => navigate('/')} style={backButtonStyle}>
+                <button onClick={() => navigate(`/classes/${classId}`)} style={backButtonStyle}>
                     <ArrowLeft size={14} /> Back to tree editor
                 </button>
 
@@ -155,9 +156,9 @@ function PIReviewPage()
                 style={selectStyle}
             >
                 <option value="">Select an outcome...</option>
-                {outcomes.map(outcome => (
-                    <option key={outcome._id} value={outcome._id}>
-                        {outcome.code}
+                {outcome_entries.map(entry => (
+                    <option key={entry.outcome_id._id} value={entry.outcome_id._id}>
+                        {entry.outcome_id.code}
                     </option>
                 ))}
             </select>
@@ -286,5 +287,6 @@ const titleInputStyle =
     color: '#1e3a5f',
     background: '#fff'
 };
+
 
 export default PIReviewPage;

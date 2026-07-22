@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ReactFlow, Background, Controls, useNodesState, useEdgesState } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Plus, Sparkles } from 'lucide-react';
@@ -13,8 +13,9 @@ const nodeTypes = { treeNode: TreeNodeComponent };
 function OutcomeTreePage()
 {
     const navigate = useNavigate();
+    const { classId } = useParams();
 
-    const [outcomes, setOutcomes] = useState([]);
+    const [class_doc, setClassDoc] = useState(null);
     const [selected_outcome_id, setSelectedOutcomeId] = useState('');
     const [trees, setTrees] = useState([]);
     const [selected_text, setSelectedText] = useState('');
@@ -27,29 +28,24 @@ function OutcomeTreePage()
 
     useEffect(() =>
     {
-        fetch('http://localhost:5001/api/outcomes')
+        fetch(`http://localhost:5001/api/classes/${classId}`)
             .then(response => response.json())
-            .then(data => setOutcomes(data))
-            .catch(error => console.error('Error fetching outcomes:', error));
-    }, []);
+            .then(data => setClassDoc(data))
+            .catch(error => console.error('Error fetching class:', error));
+    }, [classId]);
 
-    const selected_outcome = useMemo(
-        () => outcomes.find(outcome => outcome._id === selected_outcome_id),
-        [outcomes, selected_outcome_id]
+    const outcome_entries = class_doc?.outcomes ?? [];
+
+    const selected_entry = useMemo(
+        () => outcome_entries.find(entry => entry.outcome_id._id === selected_outcome_id),
+        [outcome_entries, selected_outcome_id]
     );
 
     useEffect(() =>
     {
-        if (selected_outcome)
-        {
-            setTrees(selected_outcome.trees || []);
-        }
-        else
-        {
-            setTrees([]);
-        }
+        setTrees(selected_entry ? (selected_entry.trees || []) : []);
         setSelectedNodeIds([]);
-    }, [selected_outcome]);
+    }, [selected_entry]);
 
     function countChildren(node_array, id_to_count_map)
     {
@@ -154,7 +150,7 @@ function OutcomeTreePage()
         );
     }
 
-    async function handleSave()
+async function handleSave()
     {
         if (!selected_outcome_id) return;
 
@@ -162,7 +158,7 @@ function OutcomeTreePage()
 
         try
         {
-            const response = await fetch(`http://localhost:5001/api/outcomes/${selected_outcome_id}/trees`, {
+            const response = await fetch(`http://localhost:5001/api/classes/${classId}/outcomes/${selected_outcome_id}/trees`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ trees })
@@ -173,15 +169,23 @@ function OutcomeTreePage()
                 throw new Error('Save failed');
             }
 
-            const updated_outcome = await response.json();
+            const updated_entry = await response.json();
 
-            setOutcomes(prev_outcomes =>
-                prev_outcomes.map(outcome =>
-                    outcome._id === updated_outcome._id ? updated_outcome : outcome
-                )
-            );
+            setClassDoc(prev_class =>
+            {
+                if (!prev_class) return prev_class;
 
-            setTrees(updated_outcome.trees);
+                return {
+                    ...prev_class,
+                    outcomes: prev_class.outcomes.map(entry =>
+                        entry.outcome_id._id === selected_outcome_id
+                            ? { ...entry, trees: updated_entry.trees }
+                            : entry
+                    )
+                };
+            });
+
+            setTrees(updated_entry.trees);
             setSelectedNodeIds([]);
         }
         catch (error)
@@ -203,7 +207,7 @@ function OutcomeTreePage()
 
         try
         {
-            const response = await fetch(`http://localhost:5001/api/outcomes/${selected_outcome_id}/generate-pis`, {
+            const response = await fetch(`http://localhost:5001/api/classes/${classId}/outcomes/${selected_outcome_id}/generate-pis`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ selected_node_ids })
@@ -217,12 +221,12 @@ function OutcomeTreePage()
 
             const pis = await response.json();
 
-            navigate('/pis', {
+            navigate(`/classes/${classId}/pis`, {
                 state:
                 {
                     pis,
-                    outcome_code: selected_outcome.code,
-                    outcome_id: selected_outcome_id
+                    outcome_id: selected_outcome_id,
+                    outcome_code: selected_entry.outcome_id.code
                 }
             });
         }
@@ -246,9 +250,9 @@ function OutcomeTreePage()
                     style={{ padding: 8, borderRadius: 6, border: '1px solid #e2e8f0', marginBottom: 12, width: '100%' }}
                 >
                     <option value="">Select an outcome...</option>
-                    {outcomes.map(outcome => (
-                        <option key={outcome._id} value={outcome._id}>
-                            {outcome.code}
+                    {outcome_entries.map(entry => (
+                        <option key={entry.outcome_id._id} value={entry.outcome_id._id}>
+                            {entry.outcome_id.code}
                         </option>
                     ))}
                 </select>
@@ -289,12 +293,12 @@ function OutcomeTreePage()
                     </button>
                 </div>
 
-                {selected_outcome && (
+                {selected_entry && (
                     <div
                         onMouseUp={handleTextSelection}
                         style={{ padding: 12, background: '#f8fafc', borderRadius: 8, lineHeight: 1.6 }}
                     >
-                        {selected_outcome.statement}
+                        {selected_entry.outcome_id.statement}
                     </div>
                 )}
 

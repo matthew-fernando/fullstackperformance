@@ -3,28 +3,36 @@ import Assignment from "../models/Assignment.js";
 
 async function getAssignments(req, res)
 {
-	const assignments = await Assignment.find({});
+	const { class_id } = req.query;
+
+	if (!class_id)
+	{
+		return res.status(400).json({ error: "class_id query param is required" });
+	}
+
+	const assignments = await Assignment.find({ class_id });
 	res.json(assignments);
 }
 
-async function getMappingsForOutcome(req, res)
+async function getMappingsForClassOutcome(req, res)
 {
-	const mappings = await LeafMapping.find({ outcome_id: req.params.outcome_id }).populate("assignment_id");
+	const { class_id, outcome_id } = req.params;
+	const mappings = await LeafMapping.find({ class_id, outcome_id }).populate("assignment_id");
 	res.json(mappings);
 }
 
 async function createMapping(req, res)
 {
-	const { outcome_id, node_id, assignment_id, question_id } = req.body;
+	const { class_id, outcome_id, node_id, assignment_id, question_id } = req.body;
 
-	if (!outcome_id || !node_id || !assignment_id || !question_id)
+	if (!class_id || !outcome_id || !node_id || !assignment_id || !question_id)
 	{
-		return res.status(400).json({ error: "outcome_id, node_id, assignment_id, and question_id are required" });
+		return res.status(400).json({ error: "class_id, outcome_id, node_id, assignment_id, and question_id are required" });
 	}
 
 	try
 	{
-		const mapping = await LeafMapping.create({ outcome_id, node_id, assignment_id, question_id });
+		const mapping = await LeafMapping.create({ class_id, outcome_id, node_id, assignment_id, question_id });
 		res.status(201).json(mapping);
 	}
 	catch (err)
@@ -43,4 +51,4 @@ async function deleteMapping(req, res)
 	res.status(204).send();
 }
 
-export { getAssignments, getMappingsForOutcome, createMapping, deleteMapping };
+export { getAssignments, getMappingsForClassOutcome, createMapping, deleteMapping };

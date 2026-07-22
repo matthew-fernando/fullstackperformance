@@ -11,14 +11,15 @@ const criteriaSchema = new mongoose.Schema(
 
 const questionSchema = new mongoose.Schema(
 {
-	question_label: { type: String, required: true }, // ex "E1"
+	question_label: { type: String, required: true },
 	criteria: { type: [criteriaSchema], default: [] }
 }
 );
 
 const assignmentSchema = new mongoose.Schema(
 {
-	name: { type: String, required: true }, // ex "HW8"
+	class_id: { type: mongoose.Schema.Types.ObjectId, ref: "Class", required: true },
+	name: { type: String, required: true },
 	questions: { type: [questionSchema], default: [] }
 }
 );

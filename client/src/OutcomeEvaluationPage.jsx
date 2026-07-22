@@ -1,34 +1,27 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 
 const API_BASE = 'http://localhost:5001/api';
 
 function formatPercent(value)
 {
-	if (value === null || value === undefined)
-	{
-		return '—';
-	}
-
+	if (value === null || value === undefined) return '—';
 	return `${(value * 100).toFixed(1)}%`;
 }
 
 function formatScore(value)
 {
-	if (value === null || value === undefined)
-	{
-		return 'No data';
-	}
-
+	if (value === null || value === undefined) return 'No data';
 	return `${value.toFixed(1)}%`;
 }
 
 function OutcomeEvaluationPage()
 {
 	const navigate = useNavigate();
+	const { classId } = useParams();
 
-	const [outcomes, setOutcomes] = useState([]);
+	const [class_doc, setClassDoc] = useState(null);
 	const [selected_outcome_id, setSelectedOutcomeId] = useState('');
 	const [evaluation, setEvaluation] = useState(null);
 	const [loading, setLoading] = useState(false);
@@ -36,11 +29,11 @@ function OutcomeEvaluationPage()
 
 	useEffect(() =>
 	{
-		fetch(`${API_BASE}/outcomes`)
+		fetch(`${API_BASE}/classes/${classId}`)
 			.then((response) => response.json())
-			.then(setOutcomes)
-			.catch((err) => console.error('Error fetching outcomes:', err));
-	}, []);
+			.then(setClassDoc)
+			.catch((err) => console.error('Error fetching class:', err));
+	}, [classId]);
 
 	useEffect(() =>
 	{
@@ -53,7 +46,7 @@ function OutcomeEvaluationPage()
 		setLoading(true);
 		setError(null);
 
-		fetch(`${API_BASE}/outcomes/${selected_outcome_id}/evaluation`)
+		fetch(`${API_BASE}/classes/${classId}/outcomes/${selected_outcome_id}/evaluation`)
 			.then((response) =>
 			{
 				if (!response.ok)
@@ -66,11 +59,13 @@ function OutcomeEvaluationPage()
 			.then(setEvaluation)
 			.catch((err) => setError(err.message))
 			.finally(() => setLoading(false));
-	}, [selected_outcome_id]);
+	}, [classId, selected_outcome_id]);
+
+	const outcome_entries = class_doc?.outcomes ?? [];
 
 	return (
 		<div style={{ padding: 24, maxWidth: 1000, margin: '0 auto' }}>
-			<button onClick={() => navigate('/')} style={backButtonStyle}>
+			<button onClick={() => navigate(`/classes/${classId}`)} style={backButtonStyle}>
 				<ArrowLeft size={14} /> Back
 			</button>
 
@@ -82,9 +77,9 @@ function OutcomeEvaluationPage()
 				style={selectStyle}
 			>
 				<option value="">Select an outcome...</option>
-				{outcomes.map((outcome) => (
-					<option key={outcome._id} value={outcome._id}>
-						{outcome.code}
+				{outcome_entries.map((entry) => (
+					<option key={entry.outcome_id._id} value={entry.outcome_id._id}>
+						{entry.outcome_id.code}
 					</option>
 				))}
 			</select>

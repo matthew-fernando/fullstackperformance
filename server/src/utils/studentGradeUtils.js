@@ -1,18 +1,10 @@
 import Student from '../models/Student.js';
 
-/**
- * Calculates a single question's class average as a percentage, by scanning every
- * Student record for that assignment/question, summing each student's scores against
- * the question's total, and averaging across students who were actually graded.
- * @param {String} assignment_name - matches Assignment.name / the Student gradebook key.
- * @param {String} question_label - matches Assignment.questions[].question_label / the Student gradebook key.
- * @returns {Promise<Number|null>} class average percentage (0-100), or null if no students have a graded entry.
- */
-async function calculateClassAverageForQuestion(assignment_name, question_label)
+async function calculateClassAverageForQuestion(class_id, assignment_name, question_label)
 {
     const existence_path = `assignments.${assignment_name}.questions.${question_label}`;
 
-    const students = await Student.find({ [existence_path]: { $exists: true } }).lean();
+    const students = await Student.find({ class_id, [existence_path]: { $exists: true } }).lean();
 
     const percentages = [];
 

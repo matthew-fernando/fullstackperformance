@@ -1,17 +1,25 @@
-import Outcome from '../models/Outcome.js';
+import Class from '../models/Class.js';
 import PerformanceIndicator from '../models/PerformanceIndicator.js';
 import { buildOutcomeRubricContext } from '../utils/piAggregationUtils.js';
 import { generateOutcomeRubric } from '../services/geminiService.js';
+import { findClassOutcomeEntry } from './classController.js';
 
 async function generateRubric(req, res)
 {
     try
     {
-        const outcome = await Outcome.findById(req.params.id);
+        const class_doc = await Class.findById(req.params.id).populate('outcomes.outcome_id');
 
-        if (!outcome)
+        if (!class_doc)
         {
-            return res.status(404).json({ error: 'Outcome not found' });
+            return res.status(404).json({ error: 'Class not found' });
+        }
+
+        const outcome_entry = findClassOutcomeEntry(class_doc, req.params.outcomeId);
+
+        if (!outcome_entry)
+        {
+            return res.status(404).json({ error: 'Outcome not assigned to this class' });
         }
 
         const { level_count } = req.body;
@@ -21,15 +29,15 @@ async function generateRubric(req, res)
             return res.status(400).json({ error: 'level_count is required and must be at least 2' });
         }
 
-        const pis = await PerformanceIndicator.find({ outcome_id: outcome._id });
+        const pis = await PerformanceIndicator.find({ class_id: class_doc._id, outcome_id: outcome_entry.outcome_id._id });
 
         if (pis.length === 0)
         {
             return res.status(400).json({ error: 'No performance indicators exist for this outcome yet' });
         }
 
-        const pi_contexts = await buildOutcomeRubricContext(outcome, pis);
-        const rubric = await generateOutcomeRubric(outcome, level_count, pi_contexts);
+        const pi_contexts = await buildOutcomeRubricContext(class_doc._id, outcome_entry.outcome_id._id, outcome_entry.trees, pis);
+        const rubric = await generateOutcomeRubric(outcome_entry.outcome_id, level_count, pi_contexts);
 
         const pi_text_by_id = new Map(pis.map(pi => [pi._id.toString(), pi.title]));
         rubric.rows = rubric.rows.map(row => ({
@@ -56,11 +64,18 @@ async function saveRubric(req, res)
 {
     try
     {
-        const outcome = await Outcome.findById(req.params.id);
+        const class_doc = await Class.findById(req.params.id);
 
-        if (!outcome)
+        if (!class_doc)
         {
-            return res.status(404).json({ error: 'Outcome not found' });
+            return res.status(404).json({ error: 'Class not found' });
+        }
+
+        const outcome_entry = findClassOutcomeEntry(class_doc, req.params.outcomeId);
+
+        if (!outcome_entry)
+        {
+            return res.status(404).json({ error: 'Outcome not assigned to this class' });
         }
 
         const { levels, rows } = req.body;
@@ -80,9 +95,9 @@ async function saveRubric(req, res)
         {
             const pi = await PerformanceIndicator.findById(row.pi_id);
 
-            if (!pi || pi.outcome_id.toString() !== outcome._id.toString())
+            if (!pi || pi.class_id.toString() !== class_doc._id.toString() || pi.outcome_id.toString() !== outcome_entry.outcome_id.toString())
             {
-                throw new Error(`PI ${row.pi_id} not found under this outcome`);
+                throw new Error(`PI ${row.pi_id} not found under this class/outcome`);
             }
 
             pi.assessment_levels = row.descriptors.map(descriptor =>
@@ -112,19 +127,25 @@ async function saveRubric(req, res)
     }
 }
 
-
 async function getRubric(req, res)
 {
     try
     {
-        const outcome = await Outcome.findById(req.params.id);
+        const class_doc = await Class.findById(req.params.id);
 
-        if (!outcome)
+        if (!class_doc)
         {
-            return res.status(404).json({ error: 'Outcome not found' });
+            return res.status(404).json({ error: 'Class not found' });
         }
 
-        const pis = await PerformanceIndicator.find({ outcome_id: outcome._id });
+        const outcome_entry = findClassOutcomeEntry(class_doc, req.params.outcomeId);
+
+        if (!outcome_entry)
+        {
+            return res.status(404).json({ error: 'Outcome not assigned to this class' });
+        }
+
+        const pis = await PerformanceIndicator.find({ class_id: class_doc._id, outcome_id: outcome_entry.outcome_id });
         const pis_with_levels = pis.filter(pi => pi.assessment_levels.length > 0);
 
         if (pis_with_levels.length === 0)

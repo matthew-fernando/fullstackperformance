@@ -12,8 +12,9 @@ const assessmentLevelSchema = new mongoose.Schema(
 
 const performanceIndicatorSchema = new mongoose.Schema(
 {
+    class_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
     outcome_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Outcome', required: true },
-    node_id: { type: mongoose.Schema.Types.ObjectId, required: true, unique: true },
+    node_id: { type: mongoose.Schema.Types.ObjectId, required: true },
     code: { type: String, required: true },
     title: { type: String, required: true },
     assessment_levels: { type: [assessmentLevelSchema], default: [] }
@@ -22,5 +23,7 @@ const performanceIndicatorSchema = new mongoose.Schema(
     timestamps: true,
     collection: 'performance_indicators'
 });
+
+performanceIndicatorSchema.index({ class_id: 1, node_id: 1 }, { unique: true });
 
 export default mongoose.model('PerformanceIndicator', performanceIndicatorSchema);

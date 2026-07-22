@@ -1,4 +1,4 @@
-import Outcome from '../models/Outcome.js';
+import Class from '../models/Class.js';
 import PerformanceIndicator from '../models/PerformanceIndicator.js';
 import LeafMapping from '../models/LeafMapping.js';
 import Assignment from '../models/Assignment.js';
@@ -6,12 +6,6 @@ import { calculateClassAverageForQuestion } from './studentGradeUtils.js';
 
 const WEIGHT_TOLERANCE = 0.0001;
 
-/**
- * Recursively searches an array of TreeNode subdocuments for a node matching node_id.
- * @param {Array} nodes - array of TreeNode subdocuments to search.
- * @param {mongoose.Types.ObjectId|String} node_id - target node's _id.
- * @returns {Object|null} the matching TreeNode subdocument, or null if not found.
- */
 function findNodeById(nodes, node_id)
 {
     for (const node of nodes)
@@ -35,12 +29,6 @@ function findNodeById(nodes, node_id)
     return null;
 }
 
-/**
- * Recursively collects all leaf descendants (nodes with no children) within a subtree,
- * including the root of the subtree itself if it has no children.
- * @param {Object} node - TreeNode subdocument to start from.
- * @returns {Array} flat array of leaf TreeNode subdocuments.
- */
 function collectLeafDescendants(node)
 {
     if (!node.children || node.children.length === 0)
@@ -58,17 +46,9 @@ function collectLeafDescendants(node)
     return leaves;
 }
 
-/**
- * Calculates a leaf node's score by averaging the class average (computed from the
- * Student collection) of every Rubric ("question") mapped to that leaf via LeafMapping.
- * Questions with no graded students yet are excluded.
- * @param {mongoose.Types.ObjectId|String} node_id - the leaf TreeNode's _id.
- * @param {mongoose.Types.ObjectId|String} outcome_id - the owning Outcome's _id.
- * @returns {Promise<{node_id: String, score: Number|null, is_active: Boolean, graded_question_count: Number, total_question_count: Number}>}
- */
-async function calculateLeafScore(node_id, outcome_id)
+async function calculateLeafScore(node_id, class_id)
 {
-    const mappings = await LeafMapping.find({ node_id, outcome_id }).lean();
+    const mappings = await LeafMapping.find({ node_id, class_id }).lean();
 
     if (mappings.length === 0)
     {
@@ -102,7 +82,7 @@ async function calculateLeafScore(node_id, outcome_id)
                 return Promise.resolve(null);
             }
 
-            return calculateClassAverageForQuestion(assignment.name, question.question_label);
+            return calculateClassAverageForQuestion(class_id, assignment.name, question.question_label);
         })
     );
 
@@ -131,14 +111,6 @@ async function calculateLeafScore(node_id, outcome_id)
     };
 }
 
-/**
- * Calculates a Performance Indicator's score by dynamically re-normalizing across
- * only its "active" (graded) leaf descendants, weighted by each leaf's tree-derived
- * normalized_weight. Also returns pi_coverage: the fraction (0-1) of the PI's own
- * subtree weight that is currently backed by graded leaves.
- * @param {mongoose.Types.ObjectId|String} pi_id - the PerformanceIndicator's _id.
- * @returns {Promise<{pi_id: String, score: Number|null, coverage: Number, active_leaf_count: Number, total_leaf_count: Number, leaf_scores: Array}>}
- */
 async function calculatePIScoreFromLeaves(pi_id)
 {
     const pi = await PerformanceIndicator.findById(pi_id).lean();
@@ -148,14 +120,21 @@ async function calculatePIScoreFromLeaves(pi_id)
         throw new Error(`PerformanceIndicator not found for id: ${pi_id}`);
     }
 
-    const outcome = await Outcome.findById(pi.outcome_id).lean();
+    const class_doc = await Class.findById(pi.class_id).lean();
 
-    if (!outcome)
+    if (!class_doc)
     {
-        throw new Error(`Outcome not found for id: ${pi.outcome_id}`);
+        throw new Error(`Class not found for id: ${pi.class_id}`);
     }
 
-    const pi_node = findNodeById(outcome.trees, pi.node_id);
+    const outcome_entry = class_doc.outcomes.find(entry => String(entry.outcome_id) === String(pi.outcome_id));
+
+    if (!outcome_entry)
+    {
+        throw new Error(`Outcome ${pi.outcome_id} not found on class ${pi.class_id}`);
+    }
+
+    const pi_node = findNodeById(outcome_entry.trees, pi.node_id);
 
     if (!pi_node)
     {
@@ -165,10 +144,9 @@ async function calculatePIScoreFromLeaves(pi_id)
     const leaf_nodes = collectLeafDescendants(pi_node);
 
     const leaf_scores = await Promise.all(
-        leaf_nodes.map((leaf) => calculateLeafScore(leaf._id, outcome._id))
+        leaf_nodes.map((leaf) => calculateLeafScore(leaf._id, pi.class_id))
     );
 
-    // Attach each leaf's tree-derived normalized_weight for aggregation.
     const enriched_leaf_scores = leaf_scores.map((leaf_score, index) => ({
         ...leaf_score,
         normalized_weight: leaf_nodes[index].normalized_weight
@@ -186,8 +164,6 @@ async function calculatePIScoreFromLeaves(pi_id)
         0
     );
 
-    // Coverage: what fraction of THIS PI's own subtree weight is currently assessed.
-    // pi_node.normalized_weight is the ceiling (sum of all its leaf descendants' weights).
     const coverage = Math.abs(pi_node.normalized_weight) < WEIGHT_TOLERANCE
         ? 0
         : total_leaf_weight < WEIGHT_TOLERANCE
@@ -223,33 +199,23 @@ async function calculatePIScoreFromLeaves(pi_id)
     };
 }
 
-export {
-    findNodeById,
-    collectLeafDescendants,
-    calculateLeafScore,
-    calculatePIScoreFromLeaves,
-    calculateOutcomeScore
-};
-
-/**
- * Calculates an Outcome's overall score by dynamically re-normalizing across only its
- * "active" PIs (PIs with at least one graded leaf), weighted by each PI node's
- * tree-derived normalized_weight. Root trees for an Outcome always sum to 1, so
- * coverage here is a direct 0-1 fraction (no local ceiling division needed, unlike
- * the PI-level coverage).
- * @param {mongoose.Types.ObjectId|String} outcome_id - the Outcome's _id.
- * @returns {Promise<{outcome_id: String, score: Number|null, coverage: Number, active_pi_count: Number, total_pi_count: Number, pi_results: Array}>}
- */
-async function calculateOutcomeScore(outcome_id)
+async function calculateOutcomeScore(class_id, outcome_id)
 {
-    const outcome = await Outcome.findById(outcome_id).lean();
+    const class_doc = await Class.findById(class_id).lean();
 
-    if (!outcome)
+    if (!class_doc)
     {
-        throw new Error(`Outcome not found for id: ${outcome_id}`);
+        throw new Error(`Class not found for id: ${class_id}`);
     }
 
-    const pis = await PerformanceIndicator.find({ outcome_id }).lean();
+    const outcome_entry = class_doc.outcomes.find(entry => String(entry.outcome_id) === String(outcome_id));
+
+    if (!outcome_entry)
+    {
+        throw new Error(`Outcome ${outcome_id} not found on class ${class_id}`);
+    }
+
+    const pis = await PerformanceIndicator.find({ class_id, outcome_id }).lean();
 
     if (pis.length === 0)
     {
@@ -267,10 +233,9 @@ async function calculateOutcomeScore(outcome_id)
         pis.map((pi) => calculatePIScoreFromLeaves(pi._id))
     );
 
-    // Attach each PI node's own normalized_weight (its weight within the whole outcome tree).
     const enriched_pi_results = pi_results.map((result, index) =>
     {
-        const pi_node = findNodeById(outcome.trees, pis[index].node_id);
+        const pi_node = findNodeById(outcome_entry.trees, pis[index].node_id);
 
         return {
             ...result,
@@ -313,3 +278,11 @@ async function calculateOutcomeScore(outcome_id)
         pi_results: enriched_pi_results
     };
 }
+
+export {
+    findNodeById,
+    collectLeafDescendants,
+    calculateLeafScore,
+    calculatePIScoreFromLeaves,
+    calculateOutcomeScore
+};
