@@ -4,8 +4,8 @@ import * as ollamaService from './ollamaService.js';
 // ============================================================
 // SWITCH MODEL HERE
 // ============================================================
-const LLM_PROVIDER = 'ollama';     // 'gemini' | 'ollama'
-const LLM_MODEL = 'gemma4:e4b';    // gemma-4-31b-it, gemma4:12b, etc.
+const LLM_PROVIDER = 'gemini';     // 'gemini' | 'ollama'
+const LLM_MODEL = 'gemma-4-31b-it';    // gemma-4-31b-it, gemma4:12b, etc.
 // ============================================================
 
 const providers =
