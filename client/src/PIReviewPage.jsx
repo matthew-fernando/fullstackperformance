@@ -10,7 +10,12 @@ function PIReviewPage()
 
     const [class_doc, setClassDoc] = useState(null);
     const [selected_outcome_id, setSelectedOutcomeId] = useState(location.state?.outcome_id ?? '');
-    const [pis, setPis] = useState(location.state?.pis ?? []);
+    const [pis, setPis] = useState(Array.isArray(location.state?.pis) ? location.state.pis : []);
+    const [shape_error] = useState(
+        location.state?.pis !== undefined && !Array.isArray(location.state.pis)
+            ? `Expected an array of PIs but got: ${JSON.stringify(location.state.pis).slice(0, 300)}`
+            : null
+    );
     const [loading_pis, setLoadingPis] = useState(false);
     const [saving, setSaving] = useState(false);
     const [save_error, setSaveError] = useState(null);
@@ -167,6 +172,7 @@ function PIReviewPage()
                 Review and edit each PI below before finalizing.
             </p>
 
+            {shape_error && <p style={{ color: '#dc2626', marginBottom: 16 }}>{shape_error}</p>}
             {save_error && <p style={{ color: '#dc2626', marginBottom: 16 }}>{save_error}</p>}
             {saved && !save_error && <p style={{ color: '#16a34a', marginBottom: 16 }}>Saved successfully.</p>}
             {loading_pis && <p style={{ color: '#64748b' }}>Loading PIs...</p>}

@@ -1,5 +1,5 @@
 import Class from '../models/Class.js';
-import { generatePIsFromNodes } from '../services/geminiService.js';
+import { generatePIsFromNodes } from '../services/llmService.js';
 import { getSelectedNodesWithSubtrees } from '../utils/treePathUtils.js';
 import { normalizeSiblings, stripTempIds } from '../utils/treeUtils.js';
 

@@ -1,7 +1,7 @@
 import Class from '../models/Class.js';
 import PerformanceIndicator from '../models/PerformanceIndicator.js';
 import { buildOutcomeRubricContext } from '../utils/piAggregationUtils.js';
-import { generateOutcomeRubric } from '../services/geminiService.js';
+import { generateOutcomeRubric } from '../services/llmService.js';
 import { findClassOutcomeEntry } from './classController.js';
 
 async function generateRubric(req, res)
