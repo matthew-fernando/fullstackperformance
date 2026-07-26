@@ -11,6 +11,38 @@ export async function saveBulk(req, res)
             return res.status(400).json({ error: 'class_id, outcome_id, and a non-empty pis array are required' });
         }
 
+        const incoming_node_ids = new Set(pis.map(pi => pi.node_id));
+
+        const existing_pis = await PerformanceIndicator.find({ class_id, outcome_id });
+
+        const code_owned_elsewhere = new Map();
+        existing_pis.forEach(pi =>
+        {
+            if (!incoming_node_ids.has(pi.node_id.toString()))
+            {
+                code_owned_elsewhere.set(pi.code, pi.node_id.toString());
+            }
+        });
+
+        const seen_in_this_save = new Map();
+
+        for (const pi of pis)
+        {
+            if (code_owned_elsewhere.has(pi.code))
+            {
+                return res.status(409).json({ error: `PI code "${pi.code}" is already used by another performance indicator in this outcome.` });
+            }
+
+            const owner = seen_in_this_save.get(pi.code);
+
+            if (owner && owner !== pi.node_id)
+            {
+                return res.status(409).json({ error: `PI code "${pi.code}" is used by more than one performance indicator here — codes must be unique within an outcome.` });
+            }
+
+            seen_in_this_save.set(pi.code, pi.node_id);
+        }
+
         const operations = pis.map(pi => ({
             updateOne:
             {

@@ -1,4 +1,5 @@
 import Class from '../models/Class.js';
+import PerformanceIndicator from '../models/PerformanceIndicator.js';
 import { generatePIsFromNodes } from '../services/llmService.js';
 import { getSelectedNodesWithSubtrees } from '../utils/treePathUtils.js';
 import { normalizeSiblings, stripTempIds } from '../utils/treeUtils.js';
@@ -250,11 +251,43 @@ async function generatePIsForClassOutcome(req, res)
             return res.status(400).json({ error: 'selected_node_ids is required and must be non-empty' });
         }
 
-        const selected_nodes = getSelectedNodesWithSubtrees(outcome_entry.trees, selected_node_ids);
+        const existing_pis = await PerformanceIndicator.find({
+            class_id: class_doc._id,
+            outcome_id: outcome_entry.outcome_id._id
+        });
+
+        const existing_node_ids = new Set(existing_pis.map(pi => pi.node_id.toString()));
+
+        const new_node_ids = selected_node_ids.filter(node_id => !existing_node_ids.has(node_id));
+
+        if (new_node_ids.length === 0)
+        {
+            return res.status(400).json({ error: 'All selected nodes already have performance indicators.' });
+        }
+
+        const selected_nodes = getSelectedNodesWithSubtrees(outcome_entry.trees, new_node_ids);
 
         const pis = await generatePIsFromNodes(selected_nodes, outcome_entry.outcome_id);
 
-        res.json(pis);
+        const outcome_number = outcome_entry.outcome_id.code.replace('SO', '');
+
+        let max_existing_number = 0;
+        existing_pis.forEach(pi =>
+        {
+            const match = pi.code.match(/(\d+)\s*$/);
+            if (match)
+            {
+                const parsed = parseInt(match[1], 10);
+                if (parsed > max_existing_number) max_existing_number = parsed;
+            }
+        });
+
+        const renumbered_pis = pis.map((pi, index) => ({
+            ...pi,
+            code: `PI ${outcome_number}.${max_existing_number + index + 1}`
+        }));
+
+        res.json(renumbered_pis);
     }
     catch (error)
     {

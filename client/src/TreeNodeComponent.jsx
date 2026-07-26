@@ -43,10 +43,16 @@ function TreeNodeComponent({ id, data })
                 <input
                     type="checkbox"
                     checked={is_selected}
+                    disabled={data.is_locked ?? false}
                     onChange={handleCheckboxChange}
                     className="nodrag"
-                    style={{ marginTop: 3, cursor: 'pointer', accentColor: '#2563EB' }}
-                    title="Select for PI generation"
+                    style={{
+                        marginTop: 3,
+                        cursor: data.is_locked ? 'not-allowed' : 'pointer',
+                        accentColor: '#2563EB',
+                        opacity: data.is_locked ? 0.65 : 1
+                    }}
+                    title={data.is_locked ? 'A performance indicator already exists for this node' : 'Select for PI generation'}
                 />
 
                 <div style={{ flex: 1 }}>

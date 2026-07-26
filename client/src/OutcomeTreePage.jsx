@@ -22,6 +22,7 @@ function OutcomeTreePage()
     const [is_saving, setIsSaving] = useState(false);
     const [is_generating, setIsGenerating] = useState(false);
     const [selected_node_ids, setSelectedNodeIds] = useState([]);
+    const [existing_pi_node_ids, setExistingPiNodeIds] = useState(new Set());
 
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -44,8 +45,27 @@ function OutcomeTreePage()
     useEffect(() =>
     {
         setTrees(selected_entry ? (selected_entry.trees || []) : []);
-        setSelectedNodeIds([]);
     }, [selected_entry]);
+
+    useEffect(() =>
+    {
+        if (!selected_outcome_id)
+        {
+            setExistingPiNodeIds(new Set());
+            setSelectedNodeIds([]);
+            return;
+        }
+
+        fetch(`http://localhost:5001/api/performance-indicators/class/${classId}/outcome/${selected_outcome_id}`)
+            .then(response => response.json())
+            .then(pis =>
+            {
+                const node_ids = new Set(pis.map(pi => pi.node_id));
+                setExistingPiNodeIds(node_ids);
+                setSelectedNodeIds([...node_ids]);
+            })
+            .catch(error => console.error('Error fetching existing PIs:', error));
+    }, [classId, selected_outcome_id]);
 
     function countChildren(node_array, id_to_count_map)
     {
@@ -76,6 +96,7 @@ function OutcomeTreePage()
                 ...node.data,
                 child_count: child_count_map[node.id] ?? 0,
                 is_selected: current_selected_ids.includes(node.id),
+                is_locked: existing_pi_node_ids.has(node.id),
                 onLabelChange: handleLabelChange,
                 onWeightChange: handleWeightChange,
                 onThresholdChange: handleThresholdChange,
@@ -97,7 +118,7 @@ function OutcomeTreePage()
     useEffect(() =>
     {
         rebuildFlow(trees, selected_node_ids);
-    }, [trees, selected_node_ids]);
+    }, [trees, selected_node_ids, existing_pi_node_ids]);
 
     function handleTextSelection()
     {
@@ -148,6 +169,8 @@ function OutcomeTreePage()
 
     function handleToggleSelect(node_id, is_checked)
     {
+        if (existing_pi_node_ids.has(node_id)) return;
+
         setSelectedNodeIds(prev_ids =>
             is_checked
                 ? [...prev_ids, node_id]
@@ -191,7 +214,7 @@ function OutcomeTreePage()
             });
 
             setTrees(updated_entry.trees);
-            setSelectedNodeIds([]);
+            setSelectedNodeIds([...existing_pi_node_ids]);
         }
         catch (error)
         {
@@ -204,9 +227,11 @@ function OutcomeTreePage()
         }
     }
 
+    const new_selected_node_ids = selected_node_ids.filter(id => !existing_pi_node_ids.has(id));
+
     async function handleGeneratePIs()
     {
-        if (!selected_outcome_id || selected_node_ids.length === 0) return;
+        if (!selected_outcome_id || new_selected_node_ids.length === 0) return;
 
         setIsGenerating(true);
 
@@ -215,7 +240,7 @@ function OutcomeTreePage()
             const response = await fetch(`http://localhost:5001/api/classes/${classId}/outcomes/${selected_outcome_id}/generate-pis`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ selected_node_ids })
+                body: JSON.stringify({ selected_node_ids: new_selected_node_ids })
             });
 
             if (!response.ok)
@@ -270,8 +295,8 @@ function OutcomeTreePage()
                         <Save size={14} /> {is_saving ? 'Saving...' : 'Save Tree'}
                     </button>
 
-                    <button className="btn" style={{ background: '#0891B2', color: '#fff' }} onClick={handleGeneratePIs} disabled={selected_node_ids.length === 0 || is_generating}>
-                        <Sparkles size={14} /> {is_generating ? 'Generating...' : `Generate PIs (${selected_node_ids.length} selected)`}
+                    <button className="btn" style={{ background: '#0891B2', color: '#fff' }} onClick={handleGeneratePIs} disabled={new_selected_node_ids.length === 0 || is_generating}>
+                        <Sparkles size={14} /> {is_generating ? 'Generating...' : `Generate PIs (${new_selected_node_ids.length} selected)`}
                     </button>
                 </div>
 
