@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save, Sparkles } from 'lucide-react';
+import { useLocation, useOutletContext } from 'react-router-dom';
+import { Save, Sparkles, Pencil, ClipboardList } from 'lucide-react';
 
 function computeRanges(boundaries, level_count)
 {
@@ -31,8 +31,7 @@ function evenBoundaries(level_count)
 function OutcomeRubricPage()
 {
     const location = useLocation();
-    const navigate = useNavigate();
-    const { classId } = useParams();
+    const { classId } = useOutletContext();
 
     const [class_doc, setClassDoc] = useState(null);
     const [selected_outcome_id, setSelectedOutcomeId] = useState(location.state?.outcome_id ?? '');
@@ -40,12 +39,12 @@ function OutcomeRubricPage()
     const [levels, setLevels] = useState([]);
     const [boundaries, setBoundaries] = useState([]);
     const [rows, setRows] = useState([]);
+    const [is_editing, setIsEditing] = useState(false);
     const [loading_existing, setLoadingExisting] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [generate_error, setGenerateError] = useState(null);
     const [saving, setSaving] = useState(false);
     const [save_error, setSaveError] = useState(null);
-    const [saved, setSaved] = useState(false);
     const [boundary_drafts, setBoundaryDrafts] = useState([]);
     const [level_count_draft, setLevelCountDraft] = useState('4');
 
@@ -64,12 +63,13 @@ function OutcomeRubricPage()
             setLevels([]);
             setBoundaries([]);
             setRows([]);
+            setIsEditing(false);
             return;
         }
 
         setLoadingExisting(true);
-        setSaved(false);
         setGenerateError(null);
+        setIsEditing(false);
 
         fetch(`http://localhost:5001/api/classes/${classId}/outcomes/${selected_outcome_id}/rubric`)
             .then(response => response.json())
@@ -84,6 +84,7 @@ function OutcomeRubricPage()
                     setBoundaries(loaded_boundaries);
                     setRows(data.rows);
                     setLevelCount(sorted_levels.length);
+                    setLevelCountDraft(String(sorted_levels.length));
                 }
                 else
                 {
@@ -105,7 +106,7 @@ function OutcomeRubricPage()
     const selected_entry = outcome_entries.find(entry => entry.outcome_id._id === selected_outcome_id);
     const outcome_code = selected_entry?.outcome_id.code ?? location.state?.outcome_code ?? '';
     const ranges = computeRanges(boundaries, levels.length);
-    
+    const has_rubric = rows.length > 0;
 
     function autoResizeTextarea(element)
     {
@@ -113,7 +114,7 @@ function OutcomeRubricPage()
         element.style.height = 'auto';
         element.style.height = `${element.scrollHeight}px`;
     }
-    
+
     function handleBoundaryInput(index, raw_value)
     {
         setBoundaryDrafts(prev_drafts =>
@@ -156,9 +157,8 @@ function OutcomeRubricPage()
 
         setBoundaries(new_boundaries);
         setBoundaryDrafts(new_boundaries.map(String));
-        setSaved(false);
     }
-    
+
     function handleOutcomeChange(new_outcome_id)
     {
         setSelectedOutcomeId(new_outcome_id);
@@ -176,7 +176,6 @@ function OutcomeRubricPage()
 
         setGenerating(true);
         setGenerateError(null);
-        setSaved(false);
 
         try
         {
@@ -198,6 +197,7 @@ function OutcomeRubricPage()
             setLevels(data.levels);
             setBoundaries(evenBoundaries(data.levels.length));
             setRows(data.rows);
+            setIsEditing(true);
         }
         catch (error)
         {
@@ -214,27 +214,6 @@ function OutcomeRubricPage()
         setLevels(prev_levels =>
             prev_levels.map(level => (level.order === order ? { ...level, label: new_label } : level))
         );
-        setSaved(false);
-    }
-
-    function handleBoundaryChange(index, raw_value)
-    {
-        const parsed = parseInt(raw_value, 10);
-
-        if (Number.isNaN(parsed))
-        {
-            return;
-        }
-
-        const lower_bound = index === 0 ? 0 : boundaries[index - 1];
-        const upper_bound = index === boundaries.length - 1 ? 100 : boundaries[index + 1];
-
-        const clamped = Math.min(Math.max(parsed, lower_bound + 1), upper_bound - 1);
-
-        setBoundaries(prev_boundaries =>
-            prev_boundaries.map((boundary, i) => (i === index ? clamped : boundary))
-        );
-        setSaved(false);
     }
 
     function handleDescriptorChange(pi_id, order, new_text)
@@ -252,7 +231,6 @@ function OutcomeRubricPage()
                 };
             })
         );
-        setSaved(false);
     }
 
     async function handleSave()
@@ -292,7 +270,7 @@ function OutcomeRubricPage()
                 throw new Error(body.error ?? `Save failed (${response.status})`);
             }
 
-            setSaved(true);
+            setIsEditing(false);
         }
         catch (error)
         {
@@ -305,302 +283,195 @@ function OutcomeRubricPage()
     }
 
     return (
-        <div style={{ padding: 24, maxWidth: 1100, margin: '0 auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <button onClick={() => navigate('/')}  style={backButtonStyle}>
-                    <ArrowLeft size={14} /> Back
-                </button>
-
-                {rows.length > 0 && (
-                    <button onClick={handleSave} disabled={saving} style={saveButtonStyle}>
-                        <Save size={14} /> {saving ? 'Saving...' : 'Save Rubric'}
-                    </button>
-                )}
+        <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h1>Rubrics</h1>
             </div>
 
-            <h2 style={{ marginTop: 16 }}>Outcome Grading Rubric {outcome_code && `— ${outcome_code}`}</h2>
-
-            <select
-                value={selected_outcome_id}
-                onChange={(event) => handleOutcomeChange(event.target.value)}
-                style={selectStyle}
-            >
-                <option value="">Select an outcome...</option>
-                {outcome_entries.map(entry => (
-                    <option key={entry.outcome_id._id} value={entry.outcome_id._id}>
-                        {entry.outcome_id.code}
-                    </option>
-                ))}
-            </select>
-
-            {loading_existing && <p style={{ color: '#1e3a5f' }}>Checking for an existing rubric...</p>}
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                <label style={{ fontSize: 13, color: '#FFFFFF' }}>
-                    Number of assessment levels:
-                </label>
-                <input
-                    type="number"
-                    min={2}
-                    max={10}
-                    value={level_count_draft}
-                    onChange={(event) => setLevelCountDraft(event.target.value)}
-                    onBlur={() =>
-                    {
-                        const parsed = parseInt(level_count_draft, 10);
-                        const clamped = Number.isNaN(parsed) ? level_count : Math.min(Math.max(parsed, 2), 10);
-                        setLevelCount(clamped);
-                        setLevelCountDraft(String(clamped));
-                    }}
-                    onKeyDown={(event) =>
-                    {
-                        if (event.key === 'Enter')
-                        {
-                            event.target.blur();
-                        }
-                    }}
-                    style={levelCountInputStyle}
-                />
-                <button onClick={handleGenerate} disabled={generating || !selected_outcome_id} style={generateButtonStyle}>
-                    <Sparkles size={14} /> {generating ? 'Generating...' : (rows.length > 0 ? 'Regenerate Rubric' : 'Generate Rubric')}
-                </button>
+            <div className="form-group" style={{ maxWidth: '280px' }}>
+                <label className="form-label">Outcome</label>
+                <select
+                    className="form-select"
+                    value={selected_outcome_id}
+                    onChange={event => handleOutcomeChange(event.target.value)}
+                >
+                    <option value="">Select an outcome...</option>
+                    {outcome_entries.map(entry => (
+                        <option key={entry.outcome_id._id} value={entry.outcome_id._id}>
+                            {entry.outcome_id.code}
+                        </option>
+                    ))}
+                </select>
             </div>
 
-            {generate_error && <p style={{ color: '#dc2626', marginBottom: 16 }}>{generate_error}</p>}
-            {save_error && <p style={{ color: '#dc2626', marginBottom: 16 }}>{save_error}</p>}
-            {saved && !save_error && <p style={{ color: '#16a34a', marginBottom: 16 }}>Saved successfully.</p>}
+            {loading_existing && <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Checking for an existing rubric...</p>}
 
-            {rows.length > 0 && (
-                <>
-                    <div style={boundaryStripStyle}>
-                        <span style={{ fontSize: 12, color: '#1e3a5f', fontWeight: 600 }}>0%</span>
-                        {boundary_drafts.map((draft, index) => (
-                            <input
-                                key={index}
-                                type="number"
-                                value={draft}
-                                onChange={(event) => handleBoundaryInput(index, event.target.value)}
-                                onBlur={() => handleBoundaryCommit(index)}
-                                onKeyDown={(event) =>
-                                {
-                                    if (event.key === 'Enter')
-                                    {
-                                        event.target.blur();
-                                    }
-                                }}
-                                style={boundaryInputStyle}
-                            />
-                        ))}
-                        <span style={{ fontSize: 12, color: '#1e3a5f', fontWeight: 600 }}>100%</span>
-                    </div>
-                    <p style={{ fontSize: 12, color: '#64748b', marginTop: -8, marginBottom: 16 }}>
-                        Each number is the cutoff between two levels — it can never cross its neighbors.
+            {!loading_existing && !selected_outcome_id && (
+                <div className="card" style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    <ClipboardList size={22} style={{ marginBottom: '10px', color: 'var(--text-muted)' }} />
+                    <p>Select an outcome above to view or generate its rubric.</p>
+                </div>
+            )}
+
+            {!loading_existing && selected_outcome_id && !has_rubric && (
+                <div className="card card-body">
+                    <h3 style={{ marginBottom: '4px' }}>No rubric yet for {outcome_code}</h3>
+                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                        Generate one from this outcome's performance indicators.
                     </p>
 
-                    <div style={{ overflowX: 'auto' }}>
-                        <table style={tableStyle}>
-                            <thead>
-                                <tr>
-                                    <th style={headerCellStyle}>Performance Indicator</th>
-                                    {levels.map((level, index) => (
-                                        <th key={level.order} style={headerCellStyle}>
-                                            <input
-                                                type="text"
-                                                value={level.label}
-                                                onChange={(event) => handleLevelLabelChange(level.order, event.target.value)}
-                                                style={levelLabelInputStyle}
-                                            />
-                                            <div style={{ fontSize: 12, color: '#1e3a5f', marginTop: 4, textAlign: 'center' }}>
-                                                {ranges[index].min}% – {ranges[index].max}%
-                                            </div>
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {rows.map(row => (
-                                    <tr key={row.pi_id}>
-                                        <td style={piCellStyle}>
-                                            <div style={{ fontWeight: 600, fontSize: 12, color: '#1e3a5f', marginBottom: 4 }}>
-                                                {row.pi_code}
-                                            </div>
-                                            <div style={{ fontSize: 13, color: '#1e3a5f' }}>
-                                                {row.pi_text}
-                                            </div>
-                                        </td>
-                                        {row.descriptors
-                                            .slice()
-                                            .sort((a, b) => a.order - b.order)
-                                            .map(descriptor => (
-                                                <td key={descriptor.order} style={descriptorCellStyle}>
-                                                    <textarea
-                                                        ref={autoResizeTextarea}
-                                                        value={descriptor.text}
-                                                        onChange={(event) =>
-                                                        {
-                                                            handleDescriptorChange(row.pi_id, descriptor.order, event.target.value);
-                                                            autoResizeTextarea(event.target);
-                                                        }}
-                                                        style={descriptorInputStyle}
-                                                    />
-                                                </td>
-                                            ))}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px' }}>
+                        <div className="form-group" style={{ marginBottom: 0, width: '160px' }}>
+                            <label className="form-label">Assessment Levels</label>
+                            <input
+                                type="number"
+                                min={2}
+                                max={10}
+                                className="form-input"
+                                value={level_count_draft}
+                                onChange={event => setLevelCountDraft(event.target.value)}
+                                onBlur={() =>
+                                {
+                                    const parsed = parseInt(level_count_draft, 10);
+                                    const clamped = Number.isNaN(parsed) ? level_count : Math.min(Math.max(parsed, 2), 10);
+                                    setLevelCount(clamped);
+                                    setLevelCountDraft(String(clamped));
+                                }}
+                                onKeyDown={event => { if (event.key === 'Enter') event.target.blur(); }}
+                            />
+                        </div>
+                        <button className="btn btn-primary" onClick={handleGenerate} disabled={generating}>
+                            <Sparkles size={14} /> {generating ? 'Generating...' : 'Generate Rubric'}
+                        </button>
                     </div>
-                </>
+
+                    {generate_error && <p style={{ color: 'var(--red)', fontSize: '13px', marginTop: '12px' }}>{generate_error}</p>}
+                </div>
+            )}
+
+            {!loading_existing && has_rubric && (
+                <div className="card">
+                    <div className="card-header">
+                        <h2>{outcome_code}</h2>
+
+                        {!is_editing && (
+                            <button className="btn btn-secondary" onClick={() => setIsEditing(true)}>
+                                <Pencil size={14} /> Edit
+                            </button>
+                        )}
+
+                        {is_editing && (
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button className="btn btn-secondary" onClick={handleGenerate} disabled={generating}>
+                                    <Sparkles size={14} /> {generating ? 'Regenerating...' : 'Regenerate'}
+                                </button>
+                                <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                                    <Save size={14} /> {saving ? 'Saving...' : 'Save'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="card-body">
+                        {generate_error && <p style={{ color: 'var(--red)', fontSize: '13px', marginBottom: '12px' }}>{generate_error}</p>}
+                        {save_error && <p style={{ color: 'var(--red)', fontSize: '13px', marginBottom: '12px' }}>{save_error}</p>}
+
+                        {is_editing && (
+                            <>
+                                <div style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
+                                    padding: '12px 16px', border: '1px solid var(--border)', borderRadius: '8px',
+                                    background: '#F8FAFC', marginBottom: '6px'
+                                }}>
+                                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>0%</span>
+                                    {boundary_drafts.map((draft, index) => (
+                                        <input
+                                            key={index}
+                                            type="number"
+                                            className="form-input"
+                                            value={draft}
+                                            onChange={event => handleBoundaryInput(index, event.target.value)}
+                                            onBlur={() => handleBoundaryCommit(index)}
+                                            onKeyDown={event => { if (event.key === 'Enter') event.target.blur(); }}
+                                            style={{ width: '60px', textAlign: 'center' }}
+                                        />
+                                    ))}
+                                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>100%</span>
+                                </div>
+                                <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                                    Each number is the cutoff between two levels — it can never cross its neighbors.
+                                </p>
+                            </>
+                        )}
+
+                        <div style={{ overflowX: 'auto' }}>
+                            <table className="data-table" style={{ tableLayout: 'fixed', minWidth: '720px' }}>
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: '220px' }}>Performance Indicator</th>
+                                        {levels.map((level, index) => (
+                                            <th key={level.order}>
+                                                {is_editing ? (
+                                                    <input
+                                                        type="text"
+                                                        className="form-input"
+                                                        value={level.label}
+                                                        onChange={event => handleLevelLabelChange(level.order, event.target.value)}
+                                                        style={{ fontWeight: 600, textTransform: 'none', letterSpacing: 0, marginBottom: '4px' }}
+                                                    />
+                                                ) : (
+                                                    <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text)', textTransform: 'none', letterSpacing: 0 }}>
+                                                        {level.label}
+                                                    </div>
+                                                )}
+                                                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500, textTransform: 'none', marginTop: '4px' }}>
+                                                    {ranges[index].min}% – {ranges[index].max}%
+                                                </div>
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rows.map(row => (
+                                        <tr key={row.pi_id}>
+                                            <td style={{ verticalAlign: 'top' }}>
+                                                <div style={{ fontWeight: 600, fontSize: '12px', color: 'var(--blue)', marginBottom: '3px' }}>
+                                                    {row.pi_code}
+                                                </div>
+                                                <div style={{ fontSize: '13px' }}>{row.pi_text}</div>
+                                            </td>
+                                            {row.descriptors
+                                                .slice()
+                                                .sort((a, b) => a.order - b.order)
+                                                .map(descriptor => (
+                                                    <td key={descriptor.order} style={{ verticalAlign: 'top' }}>
+                                                        {is_editing ? (
+                                                            <textarea
+                                                                ref={autoResizeTextarea}
+                                                                className="form-textarea"
+                                                                value={descriptor.text}
+                                                                onChange={event =>
+                                                                {
+                                                                    handleDescriptorChange(row.pi_id, descriptor.order, event.target.value);
+                                                                    autoResizeTextarea(event.target);
+                                                                }}
+                                                                style={{ minHeight: '48px' }}
+                                                            />
+                                                        ) : (
+                                                            <p style={{ fontSize: '13px', whiteSpace: 'pre-wrap' }}>{descriptor.text}</p>
+                                                        )}
+                                                    </td>
+                                                ))}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
 }
-
-const backButtonStyle =
-{
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '6px 12px',
-    borderRadius: 6,
-    border: '1px solid #1e3a5f',
-    background: '#fff',
-    color: '#1e3a5f',
-    cursor: 'pointer',
-    fontSize: 13
-};
-
-const saveButtonStyle =
-{
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '6px 12px',
-    borderRadius: 6,
-    border: 'none',
-    background: '#1e3a5f',
-    color: '#fff',
-    cursor: 'pointer',
-    fontSize: 13
-};
-
-const generateButtonStyle =
-{
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '6px 12px',
-    borderRadius: 6,
-    border: '1px solid #1e3a5f',
-    background: '#1e3a5f',
-    color: '#fff',
-    cursor: 'pointer',
-    fontSize: 13
-};
-
-const selectStyle =
-{
-    padding: 8,
-    borderRadius: 6,
-    border: '1px solid #1e3a5f',
-    color: '#1e3a5f',
-    marginBottom: 12,
-    width: '100%',
-    fontSize: 14,
-    background: '#fff'
-};
-
-const levelCountInputStyle =
-{
-    width: 60,
-    padding: '4px 8px',
-    borderRadius: 6,
-    border: '1px solid #1e3a5f',
-    fontSize: 13,
-    color: '#1e3a5f',
-    colorScheme: 'light'
-};
-
-const boundaryStripStyle =
-{
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    padding: '12px 16px',
-    border: '1px solid #1e3a5f',
-    borderRadius: 8,
-    marginBottom: 4,
-    background: '#fff'
-};
-
-const boundaryInputStyle =
-{
-    width: 55,
-    padding: '4px 6px',
-    borderRadius: 4,
-    border: '1px solid #1e3a5f',
-    background: '#fff',
-    fontSize: 13,
-    color: '#1e3a5f',
-    textAlign: 'center',
-    colorScheme: 'light'
-};
-
-const tableStyle =
-{
-    borderCollapse: 'collapse',
-    width: '100%',
-    background: '#fff'
-};
-
-const headerCellStyle =
-{
-    border: '1px solid #1e3a5f',
-    padding: 10,
-    background: '#fff',
-    textAlign: 'left',
-    verticalAlign: 'top',
-    minWidth: 180
-};
-
-const levelLabelInputStyle =
-{
-    fontWeight: 600,
-    fontSize: 13,
-    color: '#1e3a5f',
-    border: 'none',
-    background: 'transparent',
-    width: '100%',
-    outline: 'none'
-};
-
-const piCellStyle =
-{
-    border: '1px solid #1e3a5f',
-    padding: 10,
-    verticalAlign: 'top',
-    background: '#fff',
-    minWidth: 180
-};
-
-const descriptorCellStyle =
-{
-    border: '1px solid #1e3a5f',
-    padding: 6,
-    verticalAlign: 'top'
-};
-
-const descriptorInputStyle =
-{
-    width: '100%',
-    border: 'none',
-    fontSize: 13,
-    resize: 'vertical',
-    boxSizing: 'border-box',
-    fontFamily: 'inherit',
-    outline: 'none',
-    color: '#FFFFFF'
-};
 
 export default OutcomeRubricPage;

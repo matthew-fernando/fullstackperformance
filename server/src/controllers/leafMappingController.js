@@ -14,6 +14,51 @@ async function getAssignments(req, res)
 	res.json(assignments);
 }
 
+async function createAssignment(req, res)
+{
+	const { class_id, name, questions } = req.body;
+
+	if (!class_id || !name)
+	{
+		return res.status(400).json({ error: "class_id and name are required" });
+	}
+
+	try
+	{
+		const assignment = await Assignment.create({ class_id, name, questions: questions ?? [] });
+		res.status(201).json(assignment);
+	}
+	catch (err)
+	{
+		res.status(500).json({ error: err.message });
+	}
+}
+
+async function updateAssignment(req, res)
+{
+	const { name, questions } = req.body;
+
+	try
+	{
+		const assignment = await Assignment.findById(req.params.id);
+
+		if (!assignment)
+		{
+			return res.status(404).json({ error: "Assignment not found" });
+		}
+
+		if (name !== undefined) assignment.name = name;
+		if (questions !== undefined) assignment.questions = questions;
+
+		await assignment.save();
+		res.json(assignment);
+	}
+	catch (err)
+	{
+		res.status(500).json({ error: err.message });
+	}
+}
+
 async function getMappingsForClassOutcome(req, res)
 {
 	const { class_id, outcome_id } = req.params;
@@ -51,4 +96,4 @@ async function deleteMapping(req, res)
 	res.status(204).send();
 }
 
-export { getAssignments, getMappingsForClassOutcome, createMapping, deleteMapping };
+export { getAssignments, createAssignment, updateAssignment, getMappingsForClassOutcome, createMapping, deleteMapping };

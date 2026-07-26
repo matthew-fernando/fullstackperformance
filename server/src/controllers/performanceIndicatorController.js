@@ -51,3 +51,17 @@ export async function getByClassOutcome(req, res)
         res.status(500).json({ error: error.message });
     }
 }
+
+export async function getAllForClass(req, res)
+{
+    try
+    {
+        const { class_id } = req.params;
+        const pis = await PerformanceIndicator.find({ class_id });
+        res.status(200).json(pis);
+    }
+    catch (error)
+    {
+        res.status(500).json({ error: error.message });
+    }
+}

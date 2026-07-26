@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ReactFlow, Background, Controls, useNodesState, useEdgesState } from '@xyflow/react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
+import { ReactFlow, Background, BackgroundVariant, Controls, useNodesState, useEdgesState } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Plus, Sparkles } from 'lucide-react';
+import { Plus, Sparkles, Save } from 'lucide-react';
 import TreeNodeComponent from './TreeNodeComponent';
 import { treesToFlow } from './treeFlowUtils';
 import { layoutWithDagre } from './dagreLayout';
@@ -13,7 +13,7 @@ const nodeTypes = { treeNode: TreeNodeComponent };
 function OutcomeTreePage()
 {
     const navigate = useNavigate();
-    const { classId } = useParams();
+    const { classId } = useOutletContext();
 
     const [class_doc, setClassDoc] = useState(null);
     const [selected_outcome_id, setSelectedOutcomeId] = useState('');
@@ -63,6 +63,11 @@ function OutcomeTreePage()
         const child_count_map = {};
         countChildren(updated_trees, child_count_map);
 
+        const styled_edges = flow_edges.map(edge => ({
+            ...edge,
+            style: { stroke: '#94A3B8', strokeWidth: 1.5 }
+        }));
+
         const enriched_nodes = flow_nodes.map(node => ({
             ...node,
             type: 'treeNode',
@@ -83,10 +88,10 @@ function OutcomeTreePage()
 
         const root_ids = updated_trees.map(root => root._id);
 
-        const final_nodes = layoutWithDagre(enriched_nodes, flow_edges, root_ids);
+        const final_nodes = layoutWithDagre(enriched_nodes, styled_edges, root_ids);
 
         setNodes(final_nodes);
-        setEdges(flow_edges);
+        setEdges(styled_edges);
     }
 
     useEffect(() =>
@@ -150,7 +155,7 @@ function OutcomeTreePage()
         );
     }
 
-async function handleSave()
+    async function handleSave()
     {
         if (!selected_outcome_id) return;
 
@@ -242,80 +247,54 @@ async function handleSave()
     }
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-            <div style={{ padding: 16, borderBottom: '1px solid #e2e8f0' }}>
-                <select
-                    value={selected_outcome_id}
-                    onChange={(event) => setSelectedOutcomeId(event.target.value)}
-                    style={{ padding: 8, borderRadius: 6, border: '1px solid #e2e8f0', marginBottom: 12, width: '100%' }}
-                >
-                    <option value="">Select an outcome...</option>
-                    {outcome_entries.map(entry => (
-                        <option key={entry.outcome_id._id} value={entry.outcome_id._id}>
-                            {entry.outcome_id.code}
-                        </option>
-                    ))}
-                </select>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', margin: '-24px' }}>
+            <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', marginBottom: '14px', flexWrap: 'wrap' }}>
+                    <div className="form-group" style={{ marginBottom: 0, width: '220px' }}>
+                        <label className="form-label">Outcome</label>
+                        <select
+                            className="form-select"
+                            value={selected_outcome_id}
+                            onChange={event => setSelectedOutcomeId(event.target.value)}
+                        >
+                            <option value="">Select an outcome...</option>
+                            {outcome_entries.map(entry => (
+                                <option key={entry.outcome_id._id} value={entry.outcome_id._id}>
+                                    {entry.outcome_id.code}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
 
-                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                    <button
-                        onClick={handleSave}
-                        disabled={!selected_outcome_id || is_saving}
-                        style={{
-                            padding: '8px 16px',
-                            borderRadius: 6,
-                            border: '1px solid #1e3a5f',
-                            background: is_saving ? '#94a3b8' : '#1e3a5f',
-                            color: '#fff',
-                            cursor: is_saving ? 'not-allowed' : 'pointer'
-                        }}
-                    >
-                        {is_saving ? 'Saving...' : 'Save Tree'}
+                    <button className="btn btn-secondary" onClick={handleSave} disabled={!selected_outcome_id || is_saving}>
+                        <Save size={14} /> {is_saving ? 'Saving...' : 'Save Tree'}
                     </button>
 
-                    <button
-                        onClick={handleGeneratePIs}
-                        disabled={selected_node_ids.length === 0 || is_generating}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '8px 16px',
-                            borderRadius: 6,
-                            border: '1px solid #7c3aed',
-                            background: selected_node_ids.length === 0 || is_generating ? '#94a3b8' : '#7c3aed',
-                            color: '#fff',
-                            cursor: selected_node_ids.length === 0 || is_generating ? 'not-allowed' : 'pointer'
-                        }}
-                    >
-                        <Sparkles size={14} />
-                        {is_generating ? 'Generating...' : `Generate PIs (${selected_node_ids.length} selected)`}
+                    <button className="btn" style={{ background: '#0891B2', color: '#fff' }} onClick={handleGeneratePIs} disabled={selected_node_ids.length === 0 || is_generating}>
+                        <Sparkles size={14} /> {is_generating ? 'Generating...' : `Generate PIs (${selected_node_ids.length} selected)`}
                     </button>
                 </div>
 
                 {selected_entry && (
                     <div
                         onMouseUp={handleTextSelection}
-                        style={{ padding: 12, background: '#f8fafc', borderRadius: 8, lineHeight: 1.6 }}
+                        style={{ padding: '12px 14px', background: '#F8FAFC', border: '1px solid var(--border)', borderRadius: '8px', lineHeight: 1.6, fontSize: '13px' }}
                     >
                         {selected_entry.outcome_id.statement}
                     </div>
                 )}
 
                 {selected_text && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-                        <span style={{ fontSize: 13 }}>Selected: "{selected_text}"</span>
-                        <button
-                            onClick={handleAddRoot}
-                            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 6, border: '1px solid #2563eb', background: '#2563eb', color: '#fff', cursor: 'pointer' }}
-                        >
-                            <Plus size={14} /> Add Root
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '10px' }}>
+                        <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>Selected: "{selected_text}"</span>
+                        <button className="btn btn-primary btn-sm" onClick={handleAddRoot}>
+                            <Plus size={13} /> Add Root
                         </button>
                     </div>
                 )}
             </div>
 
-            <div style={{ flex: 1, background: '#4e5153ff' }}>
+            <div style={{ flex: 1, background: '#FFFFFF' }}>
                 <ReactFlow
                     nodes={nodes}
                     edges={edges}
@@ -325,8 +304,8 @@ async function handleSave()
                     minZoom={0.1}
                     maxZoom={2}
                 >
-                    <Background color="#cbd5e1" gap={16} />
-                    <Controls />
+                    <Background variant={BackgroundVariant.Dots} color="#CBD5E1" gap={18} size={1.5} />
+                    <Controls showInteractive={false} />
                 </ReactFlow>
             </div>
         </div>

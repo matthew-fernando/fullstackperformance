@@ -12,6 +12,7 @@ import {
 } from '../controllers/classController.js';
 import { generateRubric, saveRubric, getRubric } from '../controllers/rubricController.js';
 import { getOutcomeEvaluation } from '../controllers/evaluationController.js';
+import studentRoutes from './studentRoutes.js';
 
 
 const router = express.Router();
@@ -29,5 +30,6 @@ router.post('/:id/outcomes/:outcomeId/generate-rubric', generateRubric);
 router.put('/:id/outcomes/:outcomeId/rubric', saveRubric);
 router.get('/:id/outcomes/:outcomeId/rubric', getRubric);
 router.get('/:id/outcomes/:outcomeId/evaluation', getOutcomeEvaluation);
+router.use('/:id/students', studentRoutes);
 
 export default router;

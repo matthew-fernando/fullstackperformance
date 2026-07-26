@@ -11,26 +11,26 @@ function AssignmentLeafNode({ id, data })
 		}
 	}
 
-	const base_style = treeNodeStyle(data.type);
+	const base_style = treeNodeStyle(data.type, false);
 
 	return (
 		<div
 			onClick={handleClick}
 			style={{
 				...base_style,
-				border: data.is_selected ? '2px solid #22c55e' : base_style.border,
-				boxShadow: data.is_selected ? '0 0 0 2px rgba(34, 197, 94, 0.4)' : undefined,
+				border: data.is_selected ? '2px solid #059669' : base_style.border,
+				boxShadow: data.is_selected ? '0 0 0 3px rgba(5, 150, 105, 0.18)' : base_style.boxShadow,
 				cursor: data.is_leaf ? 'pointer' : 'default'
 			}}
 		>
 			<Handle type="target" position={Position.Top} isConnectable={false} />
 
 			{data.type === 'root' ? (
-				<div style={{ fontWeight: 600, wordBreak: 'break-word', overflowWrap: 'break-word' }}>{data.label}</div>
+				<div style={{ fontWeight: 700, fontFamily: "'Sora', sans-serif", fontSize: 13, color: '#fff', wordBreak: 'break-word' }}>{data.label}</div>
 			) : data.type === 'logical' ? (
-				<div style={{ fontWeight: 600, fontStyle: 'italic', color: '#94a3b8' }}>Logical</div>
+				<div style={{ fontWeight: 600, fontStyle: 'italic', fontSize: 12.5, color: '#475569' }}>Logical</div>
 			) : (
-				<div style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>{data.label}</div>
+				<div style={{ wordBreak: 'break-word', overflowWrap: 'break-word', fontSize: 13 }}>{data.label}</div>
 			)}
 
 			<Handle type="source" position={Position.Bottom} isConnectable={false} />
