@@ -6,7 +6,7 @@ import { Plus, Sparkles, Save } from 'lucide-react';
 import TreeNodeComponent from './TreeNodeComponent';
 import { treesToFlow } from './treeFlowUtils';
 import { layoutWithDagre } from './dagreLayout';
-import { createRootNode, addChildToNode, deleteNode, updateNodeField } from './treeStateUtils';
+import { createRootNode, addChildToNode, addChildrenToNode, deleteNode, updateNodeField } from './treeStateUtils';
 
 const nodeTypes = { treeNode: TreeNodeComponent };
 
@@ -23,6 +23,7 @@ function OutcomeTreePage()
     const [is_generating, setIsGenerating] = useState(false);
     const [selected_node_ids, setSelectedNodeIds] = useState([]);
     const [existing_pi_node_ids, setExistingPiNodeIds] = useState(new Set());
+    const [wiggle_node_id, setWiggleNodeId] = useState(null);
 
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -97,10 +98,12 @@ function OutcomeTreePage()
                 child_count: child_count_map[node.id] ?? 0,
                 is_selected: current_selected_ids.includes(node.id),
                 is_locked: existing_pi_node_ids.has(node.id),
+                is_wiggling: node.id === wiggle_node_id,
                 onLabelChange: handleLabelChange,
                 onWeightChange: handleWeightChange,
                 onThresholdChange: handleThresholdChange,
                 onAddChild: handleAddChild,
+                onAddChildren: handleAddChildren,
                 onAddLogical: handleAddLogical,
                 onDelete: handleDelete,
                 onToggleSelect: handleToggleSelect
@@ -118,7 +121,7 @@ function OutcomeTreePage()
     useEffect(() =>
     {
         rebuildFlow(trees, selected_node_ids);
-    }, [trees, selected_node_ids, existing_pi_node_ids]);
+    }, [trees, selected_node_ids, existing_pi_node_ids, wiggle_node_id]);
 
     function handleTextSelection()
     {
@@ -130,6 +133,17 @@ function OutcomeTreePage()
     {
         if (!selected_text) return;
 
+        const normalized_text = selected_text.trim().toLowerCase();
+        const duplicate_root = trees.find(root => root.label.trim().toLowerCase() === normalized_text);
+
+        if (duplicate_root)
+        {
+            setWiggleNodeId(duplicate_root._id);
+            setTimeout(() => setWiggleNodeId(null), 600);
+            setSelectedText('');
+            return;
+        }
+
         const new_root = createRootNode(selected_text);
 
         setTrees([...trees, new_root]);
@@ -139,6 +153,11 @@ function OutcomeTreePage()
     function handleAddChild(parent_id)
     {
         setTrees(prev_trees => addChildToNode(prev_trees, parent_id, false));
+    }
+
+    function handleAddChildren(parent_id, count)
+    {
+        setTrees(prev_trees => addChildrenToNode(prev_trees, parent_id, count));
     }
 
     function handleAddLogical(parent_id)
@@ -178,9 +197,23 @@ function OutcomeTreePage()
         );
     }
 
-    async function handleSave()
+    function buildTreeIdMap(old_nodes, new_nodes, id_map)
     {
-        if (!selected_outcome_id) return;
+        old_nodes.forEach((old_node, index) =>
+        {
+            const new_node = new_nodes[index];
+            if (!new_node) return;
+
+            id_map[old_node._id] = new_node._id;
+            buildTreeIdMap(old_node.children, new_node.children, id_map);
+        });
+
+        return id_map;
+    }
+
+    async function performSave()
+    {
+        if (!selected_outcome_id) return null;
 
         setIsSaving(true);
 
@@ -198,6 +231,7 @@ function OutcomeTreePage()
             }
 
             const updated_entry = await response.json();
+            const id_map = buildTreeIdMap(trees, updated_entry.trees, {});
 
             setClassDoc(prev_class =>
             {
@@ -214,17 +248,25 @@ function OutcomeTreePage()
             });
 
             setTrees(updated_entry.trees);
-            setSelectedNodeIds([...existing_pi_node_ids]);
+            setSelectedNodeIds(prev_ids => prev_ids.map(id => id_map[id] ?? id));
+
+            return { updated_trees: updated_entry.trees, id_map };
         }
         catch (error)
         {
             console.error('Error saving trees:', error);
             alert('Failed to save. Check the console for details.');
+            return null;
         }
         finally
         {
             setIsSaving(false);
         }
+    }
+
+    async function handleSave()
+    {
+        await performSave();
     }
 
     const new_selected_node_ids = selected_node_ids.filter(id => !existing_pi_node_ids.has(id));
@@ -237,10 +279,16 @@ function OutcomeTreePage()
 
         try
         {
+            const save_result = await performSave();
+
+            if (!save_result) return;
+
+            const translated_ids = new_selected_node_ids.map(id => save_result.id_map[id] ?? id);
+
             const response = await fetch(`http://localhost:5001/api/classes/${classId}/outcomes/${selected_outcome_id}/generate-pis`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ selected_node_ids: new_selected_node_ids })
+                body: JSON.stringify({ selected_node_ids: translated_ids })
             });
 
             if (!response.ok)
@@ -296,7 +344,7 @@ function OutcomeTreePage()
                     </button>
 
                     <button className="btn" style={{ background: '#0891B2', color: '#fff' }} onClick={handleGeneratePIs} disabled={new_selected_node_ids.length === 0 || is_generating}>
-                        <Sparkles size={14} /> {is_generating ? 'Generating...' : `Generate PIs (${new_selected_node_ids.length} selected)`}
+                        <Sparkles size={14} /> {is_generating ? (is_saving ? 'Saving...' : 'Generating...') : `Generate PIs (${new_selected_node_ids.length} selected)`}
                     </button>
                 </div>
 

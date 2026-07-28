@@ -1,5 +1,121 @@
+import { useState, useRef } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Plus, GitFork, Trash2 } from 'lucide-react';
+
+const HOLD_DELAY_MS = 450;
+
+function AddChildControl({ id, data, is_root })
+{
+    const [is_prompt_open, setIsPromptOpen] = useState(false);
+    const [count_value, setCountValue] = useState('');
+    const hold_timer_ref = useRef(null);
+    const long_press_fired_ref = useRef(false);
+
+    function startHoldTimer()
+    {
+        long_press_fired_ref.current = false;
+
+        hold_timer_ref.current = setTimeout(() =>
+        {
+            long_press_fired_ref.current = true;
+            setIsPromptOpen(true);
+        }, HOLD_DELAY_MS);
+    }
+
+    function cancelHoldTimer()
+    {
+        clearTimeout(hold_timer_ref.current);
+    }
+
+    function handleMouseDown(event)
+    {
+        event.stopPropagation();
+        startHoldTimer();
+    }
+
+    function handleMouseUp(event)
+    {
+        event.stopPropagation();
+        cancelHoldTimer();
+
+        if (!long_press_fired_ref.current)
+        {
+            data.onAddChild(id);
+        }
+    }
+
+    function handleMouseLeave()
+    {
+        cancelHoldTimer();
+    }
+
+    function handleCountSubmit(event)
+    {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const count = parseInt(count_value, 10);
+
+        if (count > 0)
+        {
+            data.onAddChildren(id, count);
+        }
+
+        setCountValue('');
+        setIsPromptOpen(false);
+    }
+
+    return (
+        <div style={{ position: 'relative' }}>
+            <button
+                onMouseDown={handleMouseDown}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseLeave}
+                className="nodrag"
+                style={iconBtnStyle(is_root)}
+                title="Add child (hold to add several at once)"
+            >
+                <Plus size={13} />
+            </button>
+
+            {is_prompt_open && (
+                <form
+                    onSubmit={handleCountSubmit}
+                    className="nodrag"
+                    style={{
+                        position: 'absolute',
+                        bottom: '32px',
+                        left: 0,
+                        background: '#fff',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: 6,
+                        padding: '4px 5px',
+                        display: 'flex',
+                        gap: 4,
+                        zIndex: 10,
+                        boxShadow: '0 2px 8px rgba(15, 23, 42, 0.18)'
+                    }}
+                >
+                    <input
+                        type="number"
+                        min="1"
+                        autoFocus
+                        value={count_value}
+                        onChange={event => setCountValue(event.target.value)}
+                        placeholder="#"
+                        style={{ width: 36, fontSize: 11, border: '1px solid #E2E8F0', borderRadius: 4, padding: '2px 4px' }}
+                    />
+                    <button
+                        type="submit"
+                        style={{ fontSize: 11, border: 'none', background: '#2563EB', color: '#fff', borderRadius: 4, padding: '2px 7px', cursor: 'pointer' }}
+                    >
+                        Add
+                    </button>
+                </form>
+            )}
+        </div>
+    );
+}
 
 function TreeNodeComponent({ id, data })
 {
@@ -36,7 +152,7 @@ function TreeNodeComponent({ id, data })
     const is_selected = data.is_selected ?? false;
 
     return (
-        <div style={nodeStyle(data.type, is_selected)}>
+        <div style={{ ...nodeStyle(data.type, is_selected), animation: data.is_wiggling ? 'wiggle 0.5s ease-in-out' : 'none' }}>
             <Handle type="target" position={Position.Top} isConnectable={false} style={handleStyle} />
 
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7, marginBottom: 8 }}>
@@ -100,13 +216,11 @@ function TreeNodeComponent({ id, data })
             )}
 
             <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
-                <button onClick={() => data.onAddChild(id)} style={iconBtnStyle(is_root)} title="Add child">
-                    <Plus size={13} />
-                </button>
-                <button onClick={() => data.onAddLogical(id)} style={iconBtnStyle(is_root)} title="Add logical child">
+                <AddChildControl id={id} data={data} is_root={is_root} />
+                <button onClick={() => data.onAddLogical(id)} className="nodrag" style={iconBtnStyle(is_root)} title="Add logical child">
                     <GitFork size={13} style={{ transform: 'rotate(180deg)' }} />
                 </button>
-                <button onClick={() => data.onDelete(id)} style={{ ...iconBtnStyle(is_root), color: '#DC2626', borderColor: '#FCA5A5' }} title="Delete">
+                <button onClick={() => data.onDelete(id)} className="nodrag" style={{ ...iconBtnStyle(is_root), color: '#DC2626', borderColor: '#FCA5A5' }} title="Delete">
                     <Trash2 size={13} />
                 </button>
             </div>
@@ -152,7 +266,7 @@ export function treeNodeStyle(type, is_selected)
         padding: 14,
         borderRadius: 10,
         border: is_selected ? '2px solid #2563EB' : '1px solid #E2E8F0',
-        background: '#F8FAFC',
+        background: '#E3E8EF',
         width: 220,
         minHeight: 110,
         fontSize: 12,
@@ -177,7 +291,7 @@ function inputStyle(type)
         fontSize: 12,
         fontFamily: "'IBM Plex Sans', sans-serif",
         width: '100%',
-        background: is_root ? 'rgba(255,255,255,0.12)' : '#FFFFFF',
+        background: is_root ? 'rgba(255,255,255,0.12)' : '#F8FAFC',
         color: is_root ? '#fff' : '#0F172A',
         boxSizing: 'border-box',
         wordBreak: 'break-word',

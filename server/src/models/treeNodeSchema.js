@@ -5,7 +5,11 @@ const treeNodeSchema = new mongoose.Schema(
     label:
     {
         type: String,
-        required: true
+        required: function ()
+        {
+            return this.type !== 'logical';
+        },
+        default: ''
     },
     type:
     {

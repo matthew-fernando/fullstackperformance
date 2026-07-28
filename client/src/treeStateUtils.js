@@ -69,6 +69,27 @@ export function addChildToNode(trees, parent_id, is_logical)
     });
 }
 
+export function addChildrenToNode(trees, parent_id, count)
+{
+    return mapTree(trees, parent_id, parent_node =>
+    {
+        const new_children = [...parent_node.children];
+
+        for (let i = 0; i < count; i++)
+        {
+            new_children.push(createChildNode(parent_node.level, 'New keyword', 'keyword'));
+        }
+
+        const was_all = parent_node.threshold === parent_node.children.length;
+
+        return {
+            ...parent_node,
+            children: new_children,
+            threshold: was_all ? new_children.length : parent_node.threshold
+        };
+    });
+}
+
 function removeNodeById(node_array, target_id)
 {
     const filtered = node_array.filter(node => node._id !== target_id);
