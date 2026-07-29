@@ -182,4 +182,39 @@ async function getRubric(req, res)
     }
 }
 
-export { generateRubric, saveRubric, getRubric };
+async function deleteRubric(req, res)
+{
+    try
+    {
+        const class_doc = await Class.findById(req.params.id);
+
+        if (!class_doc)
+        {
+            return res.status(404).json({ error: 'Class not found' });
+        }
+
+        const outcome_entry = findClassOutcomeEntry(class_doc, req.params.outcomeId);
+
+        if (!outcome_entry)
+        {
+            return res.status(404).json({ error: 'Outcome not assigned to this class' });
+        }
+
+        const pis = await PerformanceIndicator.find({ class_id: class_doc._id, outcome_id: outcome_entry.outcome_id });
+
+        await Promise.all(pis.map(pi =>
+        {
+            pi.assessment_levels = [];
+            return pi.save();
+        }));
+
+        res.status(200).json({ success: true });
+    }
+    catch (error)
+    {
+        console.error('Error deleting rubric:', error);
+        res.status(500).json({ error: 'Failed to delete rubric' });
+    }
+}
+
+export { generateRubric, saveRubric, getRubric, deleteRubric };

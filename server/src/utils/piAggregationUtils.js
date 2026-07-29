@@ -49,17 +49,19 @@ function buildLeafContext(leaf_node, mappings_by_node_id)
 {
     const mappings = mappings_by_node_id.get(leaf_node._id.toString()) || [];
 
-    const questions = mappings.map(mapping =>
-    {
-        const assignment = mapping.assignment_id;
-        const question = assignment.questions.find(q => q._id.toString() === mapping.question_id.toString());
+    const questions = mappings
+        .filter(mapping => mapping.assignment_id)
+        .map(mapping =>
+        {
+            const assignment = mapping.assignment_id;
+            const question = assignment.questions.find(q => q._id.toString() === mapping.question_id.toString());
 
-        return {
-            assignment: assignment.name,
-            question_id: question ? question.question_label : '(unknown)',
-            criteria: question ? question.criteria : []
-        };
-    });
+            return {
+                assignment: assignment.name,
+                question_id: question ? question.question_label : '(unknown)',
+                criteria: question ? question.criteria : []
+            };
+        });
 
     return {
         leaf_id: leaf_node._id,

@@ -10,7 +10,7 @@ import {
     saveTrees, 
     generatePIsForClassOutcome
 } from '../controllers/classController.js';
-import { generateRubric, saveRubric, getRubric } from '../controllers/rubricController.js';
+import { generateRubric, saveRubric, getRubric, deleteRubric } from '../controllers/rubricController.js';
 import { getOutcomeEvaluation } from '../controllers/evaluationController.js';
 import studentRoutes from './studentRoutes.js';
 
@@ -29,6 +29,7 @@ router.post('/:id/outcomes/:outcomeId/generate-pis', generatePIsForClassOutcome)
 router.post('/:id/outcomes/:outcomeId/generate-rubric', generateRubric);
 router.put('/:id/outcomes/:outcomeId/rubric', saveRubric);
 router.get('/:id/outcomes/:outcomeId/rubric', getRubric);
+router.delete('/:id/outcomes/:outcomeId/rubric', deleteRubric);
 router.get('/:id/outcomes/:outcomeId/evaluation', getOutcomeEvaluation);
 router.use('/:id/students', studentRoutes);
 

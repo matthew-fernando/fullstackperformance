@@ -48,7 +48,20 @@ async function updateAssignment(req, res)
 		}
 
 		if (name !== undefined) assignment.name = name;
-		if (questions !== undefined) assignment.questions = questions;
+
+		if (questions !== undefined)
+		{
+			const old_question_ids = assignment.questions.map(q => q._id.toString());
+			const new_question_ids = new Set(questions.filter(q => q._id).map(q => q._id.toString()));
+			const removed_question_ids = old_question_ids.filter(id => !new_question_ids.has(id));
+
+			if (removed_question_ids.length > 0)
+			{
+				await LeafMapping.deleteMany({ assignment_id: assignment._id, question_id: { $in: removed_question_ids } });
+			}
+
+			assignment.questions = questions;
+		}
 
 		await assignment.save();
 		res.json(assignment);
@@ -96,4 +109,26 @@ async function deleteMapping(req, res)
 	res.status(204).send();
 }
 
-export { getAssignments, createAssignment, updateAssignment, getMappingsForClassOutcome, createMapping, deleteMapping };
+async function deleteAssignment(req, res)
+{
+	try
+	{
+		const deleted = await Assignment.findByIdAndDelete(req.params.id);
+
+		if (!deleted)
+		{
+			return res.status(404).json({ error: "Assignment not found" });
+		}
+
+		await LeafMapping.deleteMany({ assignment_id: req.params.id });
+
+		res.status(200).json({ success: true });
+	}
+	catch (err)
+	{
+		res.status(500).json({ error: err.message });
+	}
+}
+
+export { getAssignments, createAssignment, updateAssignment, deleteAssignment, 
+		getMappingsForClassOutcome, createMapping, deleteMapping };

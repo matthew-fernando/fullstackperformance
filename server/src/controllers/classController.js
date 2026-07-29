@@ -3,6 +3,7 @@ import PerformanceIndicator from '../models/PerformanceIndicator.js';
 import { generatePIsFromNodes } from '../services/llmService.js';
 import { getSelectedNodesWithSubtrees } from '../utils/treePathUtils.js';
 import { normalizeSiblings, stripTempIds } from '../utils/treeUtils.js';
+import LeafMapping from '../models/LeafMapping.js';
 
 async function getAllClasses(req, res)
 {
@@ -186,6 +187,21 @@ function findClassOutcomeEntry(class_doc, outcome_id)
     });
 }
 
+function collectNodeIds(node_array, id_set)
+{
+    node_array.forEach(node =>
+    {
+        if (node && node._id)
+        {
+            id_set.add(node._id.toString());
+        }
+
+        collectNodeIds(node.children ?? [], id_set);
+    });
+
+    return id_set;
+}
+
 async function saveTrees(req, res)
 {
     try
@@ -211,11 +227,25 @@ async function saveTrees(req, res)
             return res.status(400).json({ error: 'trees must be an array' });
         }
 
+        const old_node_ids = collectNodeIds(outcome_entry.trees, new Set());
+
         const stripped_trees = stripTempIds(trees);
         const normalized_trees = normalizeSiblings(stripped_trees, 1);
 
         outcome_entry.trees = normalized_trees;
+
+        const new_node_ids = collectNodeIds(outcome_entry.trees, new Set());
+        const removed_node_ids = [...old_node_ids].filter(id => !new_node_ids.has(id));
+
         await class_doc.save();
+
+        if (removed_node_ids.length > 0)
+        {
+            await Promise.all([
+                PerformanceIndicator.deleteMany({ class_id: class_doc._id, node_id: { $in: removed_node_ids } }),
+                LeafMapping.deleteMany({ class_id: class_doc._id, node_id: { $in: removed_node_ids } })
+            ]);
+        }
 
         res.json(outcome_entry);
     }
