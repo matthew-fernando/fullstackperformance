@@ -12,7 +12,7 @@ function emptyCriterion()
     return { desc: '', points: 0, deduction: [] };
 }
 
-function AssignmentFormModal({ initial_assignment, onClose, onSave })
+function AssignmentFormModal({ initial_assignment, onClose, onSave, onDelete })
 {
     const is_editing = !!initial_assignment;
 
@@ -22,6 +22,9 @@ function AssignmentFormModal({ initial_assignment, onClose, onSave })
     );
     const [is_saving, setIsSaving] = useState(false);
     const [error, setError] = useState(null);
+
+    const [delete_armed, setDeleteArmed] = useState(false);
+    const [armed_question_index, setArmedQuestionIndex] = useState(null);
 
     useEffect(() =>
     {
@@ -41,7 +44,14 @@ function AssignmentFormModal({ initial_assignment, onClose, onSave })
 
     function removeQuestion(index)
     {
+        if (armed_question_index !== index)
+        {
+            setArmedQuestionIndex(index);
+            return;
+        }
+
         setQuestions(prev => prev.filter((_, i) => i !== index));
+        setArmedQuestionIndex(null);
     }
 
     function addCriterion(question_index)
@@ -113,12 +123,45 @@ function AssignmentFormModal({ initial_assignment, onClose, onSave })
         }
     }
 
+    async function handleDeleteAssignment()
+    {
+        if (!delete_armed)
+        {
+            setDeleteArmed(true);
+            return;
+        }
+
+        setIsSaving(true);
+        setError(null);
+
+        try
+        {
+            await onDelete(initial_assignment._id);
+        }
+        catch (err)
+        {
+            setError(err.message || 'Failed to delete assignment.');
+            setIsSaving(false);
+        }
+    }
+
     return (
         <Modal
             title={is_editing ? 'Edit Assignment' : 'Add Assignment'}
             onClose={onClose}
             footer={(
                 <>
+                    {is_editing && (
+                        <button
+                            className="btn btn-secondary"
+                            style={delete_armed ? { background: 'var(--red)', color: '#fff', borderColor: 'var(--red)' } : { color: 'var(--red)' }}
+                            onClick={handleDeleteAssignment}
+                            disabled={is_saving}
+                        >
+                            {delete_armed ? 'Confirm Delete Assignment' : 'Delete Assignment'}
+                        </button>
+                    )}
+                    <div style={{ flex: 1 }} />
                     <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
                     <button className="btn btn-primary" onClick={handleSubmit} disabled={is_saving}>
                         {is_saving ? 'Saving...' : is_editing ? 'Save Changes' : 'Create Assignment'}
@@ -145,8 +188,13 @@ function AssignmentFormModal({ initial_assignment, onClose, onSave })
                                 value={question.question_label}
                                 onChange={e => updateQuestionLabel(question_index, e.target.value)}
                             />
-                            <button className="btn btn-ghost btn-sm" onClick={() => removeQuestion(question_index)} title="Remove question">
-                                <Trash2 size={13} />
+                            <button
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => removeQuestion(question_index)}
+                                style={armed_question_index === question_index ? { color: '#fff', background: 'var(--red)' } : { color: 'var(--red)' }}
+                                title={armed_question_index === question_index ? 'Click again to confirm — deletes any linked leaf mappings' : 'Remove question'}
+                            >
+                                <Trash2 size={13} /> {armed_question_index === question_index ? 'Confirm' : ''}
                             </button>
                         </div>
 

@@ -24,6 +24,8 @@ function OutcomeTreePage()
     const [selected_node_ids, setSelectedNodeIds] = useState([]);
     const [existing_pi_node_ids, setExistingPiNodeIds] = useState(new Set());
     const [wiggle_node_id, setWiggleNodeId] = useState(null);
+    const [pi_by_node_id, setPiByNodeId] = useState(new Map());
+    const [leaf_linked_node_ids, setLeafLinkedNodeIds] = useState(new Set());
 
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -64,8 +66,23 @@ function OutcomeTreePage()
                 const node_ids = new Set(pis.map(pi => pi.node_id));
                 setExistingPiNodeIds(node_ids);
                 setSelectedNodeIds([...node_ids]);
+                setPiByNodeId(new Map(pis.map(pi => [pi.node_id, pi])));
             })
             .catch(error => console.error('Error fetching existing PIs:', error));
+    }, [classId, selected_outcome_id]);
+
+    useEffect(() =>
+    {
+        if (!selected_outcome_id)
+        {
+            setLeafLinkedNodeIds(new Set());
+            return;
+        }
+
+        fetch(`http://localhost:5001/api/classes/${classId}/outcomes/${selected_outcome_id}/leaf-mappings`)
+            .then(response => response.json())
+            .then(mappings => setLeafLinkedNodeIds(new Set(mappings.map(m => m.node_id))))
+            .catch(error => console.error('Error fetching leaf mappings:', error));
     }, [classId, selected_outcome_id]);
 
     function countChildren(node_array, id_to_count_map)
@@ -106,7 +123,8 @@ function OutcomeTreePage()
                 onAddChildren: handleAddChildren,
                 onAddLogical: handleAddLogical,
                 onDelete: handleDelete,
-                onToggleSelect: handleToggleSelect
+                onToggleSelect: handleToggleSelect,
+                onAttemptUnlink: handleAttemptUnlink
             }
         }));
 
@@ -121,7 +139,7 @@ function OutcomeTreePage()
     useEffect(() =>
     {
         rebuildFlow(trees, selected_node_ids);
-    }, [trees, selected_node_ids, existing_pi_node_ids, wiggle_node_id]);
+    }, [trees, selected_node_ids, existing_pi_node_ids, wiggle_node_id, pi_by_node_id]);
 
     function handleTextSelection()
     {
@@ -165,8 +183,55 @@ function OutcomeTreePage()
         setTrees(prev_trees => addChildToNode(prev_trees, parent_id, true));
     }
 
+    function findNodeInTrees(node_array, target_id)
+    {
+        for (const node of node_array)
+        {
+            if (node._id === target_id) return node;
+            const found = findNodeInTrees(node.children, target_id);
+            if (found) return found;
+        }
+        return null;
+    }
+
+    function flattenSubtreeIds(node)
+    {
+        return [node._id, ...node.children.flatMap(flattenSubtreeIds)];
+    }
+
     function handleDelete(node_id)
     {
+        const target_node = findNodeInTrees(trees, node_id);
+        const subtree_ids = target_node ? flattenSubtreeIds(target_node) : [node_id];
+
+        const affected_pi_codes = subtree_ids
+            .filter(id => existing_pi_node_ids.has(id))
+            .map(id => pi_by_node_id.get(id)?.code)
+            .filter(Boolean);
+
+        const affected_leaf_count = subtree_ids.filter(id => leaf_linked_node_ids.has(id)).length;
+
+        if (affected_pi_codes.length > 0 || affected_leaf_count > 0)
+        {
+            const parts = [];
+
+            if (affected_pi_codes.length > 0)
+            {
+                parts.push(`performance indicator${affected_pi_codes.length > 1 ? 's' : ''} ${affected_pi_codes.join(', ')}`);
+            }
+
+            if (affected_leaf_count > 0)
+            {
+                parts.push(`${affected_leaf_count} assignment leaf link${affected_leaf_count > 1 ? 's' : ''}`);
+            }
+
+            const confirmed = window.confirm(
+                `Deleting this node (and everything under it) will also delete the ${parts.join(' and ')}. This takes effect once you Save Tree. Continue?`
+            );
+
+            if (!confirmed) return;
+        }
+
         setTrees(prev_trees => deleteNode(prev_trees, node_id));
         setSelectedNodeIds(prev_ids => prev_ids.filter(id => id !== node_id));
     }
@@ -188,8 +253,6 @@ function OutcomeTreePage()
 
     function handleToggleSelect(node_id, is_checked)
     {
-        if (existing_pi_node_ids.has(node_id)) return;
-
         setSelectedNodeIds(prev_ids =>
             is_checked
                 ? [...prev_ids, node_id]
@@ -267,6 +330,50 @@ function OutcomeTreePage()
     async function handleSave()
     {
         await performSave();
+    }
+
+    async function handleAttemptUnlink(node_id)
+    {
+        const pi = pi_by_node_id.get(node_id);
+
+        if (!pi) return;
+
+        const confirmed = window.confirm(
+            `This node is linked to ${pi.code} (${pi.title}). Unchecking it will delete that performance indicator. Continue?`
+        );
+
+        if (!confirmed) return;
+
+        try
+        {
+            const response = await fetch(`http://localhost:5001/api/performance-indicators/${pi._id}`, { method: 'DELETE' });
+
+            if (!response.ok)
+            {
+                throw new Error('Failed to delete performance indicator');
+            }
+
+            setExistingPiNodeIds(prev =>
+            {
+                const next = new Set(prev);
+                next.delete(node_id);
+                return next;
+            });
+
+            setSelectedNodeIds(prev_ids => prev_ids.filter(id => id !== node_id));
+
+            setPiByNodeId(prev =>
+            {
+                const next = new Map(prev);
+                next.delete(node_id);
+                return next;
+            });
+        }
+        catch (error)
+        {
+            console.error('Error deleting PI:', error);
+            alert('Failed to delete the performance indicator. Check the console for details.');
+        }
     }
 
     const new_selected_node_ids = selected_node_ids.filter(id => !existing_pi_node_ids.has(id));

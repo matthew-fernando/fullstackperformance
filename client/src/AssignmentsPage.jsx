@@ -183,6 +183,21 @@ function AssignmentsPage()
         fetchAssignments();
     }
 
+    async function handleFormDelete(assignment_id)
+    {
+        const response = await fetch(`${API_BASE}/assignments/${assignment_id}`, { method: 'DELETE' });
+
+        if (!response.ok)
+        {
+            const body = await response.json().catch(() => ({}));
+            throw new Error(body.error || 'Failed to delete assignment');
+        }
+
+        setIsFormOpen(false);
+        setEditingAssignment(null);
+        fetchAssignments();
+    }
+
     async function handleSaveLinks()
     {
         if (!selected_question_id || !selected_assignment_id || !selected_outcome_id) return;
@@ -380,6 +395,7 @@ function AssignmentsPage()
                     initial_assignment={editing_assignment}
                     onClose={() => { setIsFormOpen(false); setEditingAssignment(null); }}
                     onSave={handleFormSave}
+                    onDelete={handleFormDelete}
                 />
             )}
         </div>

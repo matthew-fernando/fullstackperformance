@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useLocation, useOutletContext } from 'react-router-dom';
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { Save, Pencil, Gauge } from 'lucide-react';
 
 const API_BASE = 'http://localhost:5001/api';
@@ -17,7 +17,10 @@ function PerformanceIndicatorsPage()
     const [saving_outcome_id, setSavingOutcomeId] = useState(null);
     const [save_errors, setSaveErrors] = useState({});
     const [has_scrolled, setHasScrolled] = useState(false);
-
+    const [armed_pi_id, setArmedPiId] = useState(null);
+    
+    const navigate = useNavigate();
+    const initial_outcome_id_ref = useRef(location.state?.outcome_id);  
     const section_refs = useRef({});
 
     useEffect(() =>
@@ -58,6 +61,11 @@ function PerformanceIndicatorsPage()
                     groups[incoming_outcome_id] = [...by_node_id.values()];
 
                     setEditingOutcomeIds(new Set([incoming_outcome_id]));
+
+                    // Clear the navigation state now that we've used it once, so a page
+                    // reload on this same history entry can't re-apply these stale,
+                    // pre-save candidates over data that's since been saved for real.
+                    navigate(location.pathname, { replace: true, state: null });
                 }
 
                 setPiGroups(groups);
@@ -70,14 +78,14 @@ function PerformanceIndicatorsPage()
     {
         if (has_scrolled || is_loading) return;
 
-        const target_outcome_id = location.state?.outcome_id;
+        const target_outcome_id = initial_outcome_id_ref.current;
 
         if (target_outcome_id && section_refs.current[target_outcome_id])
         {
             section_refs.current[target_outcome_id].scrollIntoView({ behavior: 'smooth', block: 'center' });
             setHasScrolled(true);
         }
-    }, [is_loading, has_scrolled, location.state]);
+    }, [is_loading, has_scrolled]);
 
     function autoResizeTextarea(element)
     {
@@ -106,6 +114,38 @@ function PerformanceIndicatorsPage()
     {
         setSaveErrors(prev => ({ ...prev, [outcome_id]: null }));
         setEditingOutcomeIds(prev => new Set(prev).add(outcome_id));
+    }
+
+    async function handleDeletePi(outcome_id, pi)
+    {
+        if (!pi._id) return;
+
+        if (armed_pi_id !== pi._id)
+        {
+            setArmedPiId(pi._id);
+            return;
+        }
+
+        try
+        {
+            const response = await fetch(`${API_BASE}/performance-indicators/${pi._id}`, { method: 'DELETE' });
+
+            if (!response.ok)
+            {
+                const body = await response.json().catch(() => ({}));
+                throw new Error(body.error ?? 'Delete failed');
+            }
+
+            setPiGroups(prev => ({
+                ...prev,
+                [outcome_id]: prev[outcome_id].filter(p => p._id !== pi._id)
+            }));
+            setArmedPiId(null);
+        }
+        catch (error)
+        {
+            setSaveErrors(prev => ({ ...prev, [outcome_id]: error.message }));
+        }
     }
 
     async function handleSaveOutcome(outcome_id)
@@ -232,6 +272,13 @@ function PerformanceIndicatorsPage()
                                                         className="form-textarea"
                                                         style={{ minHeight: '40px' }}
                                                     />
+                                                    <button
+                                                        className="btn btn-ghost btn-sm"
+                                                        style={{ marginTop: '6px', color: 'var(--red)', ...(armed_pi_id === pi._id ? { background: 'var(--red)', color: '#fff' } : {}) }}
+                                                        onClick={() => handleDeletePi(outcome._id, pi)}
+                                                    >
+                                                        {armed_pi_id === pi._id ? 'Confirm Delete PI' : 'Delete PI'}
+                                                    </button>
                                                 </>
                                             ) : (
                                                 <>

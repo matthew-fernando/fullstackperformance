@@ -144,7 +144,15 @@ function TreeNodeComponent({ id, data })
 
     function handleCheckboxChange(event)
     {
-        data.onToggleSelect(id, event.target.checked);
+        const wants_checked = event.target.checked;
+
+        if (!wants_checked && (data.is_locked ?? false))
+        {
+            data.onAttemptUnlink(id);
+            return;
+        }
+
+        data.onToggleSelect(id, wants_checked);
     }
 
     const is_root = data.type === 'root';
@@ -159,16 +167,15 @@ function TreeNodeComponent({ id, data })
                 <input
                     type="checkbox"
                     checked={is_selected}
-                    disabled={data.is_locked ?? false}
                     onChange={handleCheckboxChange}
                     className="nodrag"
                     style={{
                         marginTop: 3,
-                        cursor: data.is_locked ? 'not-allowed' : 'pointer',
+                        cursor: 'pointer',
                         accentColor: '#2563EB',
                         opacity: data.is_locked ? 0.65 : 1
                     }}
-                    title={data.is_locked ? 'A performance indicator already exists for this node' : 'Select for PI generation'}
+                    title={data.is_locked ? 'Linked to a performance indicator — unchecking will offer to delete it' : 'Select for PI generation'}
                 />
 
                 <div style={{ flex: 1 }}>

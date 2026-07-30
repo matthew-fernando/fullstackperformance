@@ -47,6 +47,8 @@ function OutcomeRubricPage()
     const [save_error, setSaveError] = useState(null);
     const [boundary_drafts, setBoundaryDrafts] = useState([]);
     const [level_count_draft, setLevelCountDraft] = useState('4');
+    const [delete_armed, setDeleteArmed] = useState(false);
+    const [deleting, setDeleting] = useState(false);
 
     useEffect(() =>
     {
@@ -282,6 +284,46 @@ function OutcomeRubricPage()
         }
     }
 
+    async function handleDeleteRubric()
+    {
+        if (!delete_armed)
+        {
+            setDeleteArmed(true);
+            return;
+        }
+
+        setDeleting(true);
+        setSaveError(null);
+
+        try
+        {
+            const response = await fetch(`http://localhost:5001/api/classes/${classId}/outcomes/${selected_outcome_id}/rubric`,
+            {
+                method: 'DELETE'
+            });
+
+            if (!response.ok)
+            {
+                const body = await response.json().catch(() => ({}));
+                throw new Error(body.error ?? 'Delete failed');
+            }
+
+            setLevels([]);
+            setBoundaries([]);
+            setRows([]);
+            setIsEditing(false);
+            setDeleteArmed(false);
+        }
+        catch (error)
+        {
+            setSaveError(error.message);
+        }
+        finally
+        {
+            setDeleting(false);
+        }
+    }
+
     return (
         <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -362,6 +404,15 @@ function OutcomeRubricPage()
 
                         {is_editing && (
                             <div style={{ display: 'flex', gap: '8px' }}>
+                                <button className="btn btn-secondary" onClick={() => setIsEditing(false)}>Cancel</button>
+                                <button
+                                    className="btn btn-secondary"
+                                    style={delete_armed ? { background: 'var(--red)', color: '#fff', borderColor: 'var(--red)' } : { color: 'var(--red)' }}
+                                    onClick={handleDeleteRubric}
+                                    disabled={deleting}
+                                >
+                                    {delete_armed ? 'Confirm Delete' : 'Delete Rubric'}
+                                </button>
                                 <button className="btn btn-secondary" onClick={handleGenerate} disabled={generating}>
                                     <Sparkles size={14} /> {generating ? 'Regenerating...' : 'Regenerate'}
                                 </button>

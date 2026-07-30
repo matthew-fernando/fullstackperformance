@@ -16,6 +16,7 @@ function StudentsPage()
     const [hovered_id, setHoveredId] = useState(null);
     const [is_saving, setIsSaving] = useState(false);
     const [error, setError] = useState(null);
+    const [delete_armed, setDeleteArmed] = useState(false);
 
     const [student_id, setStudentId] = useState('');
     const [first_name, setFirstName] = useState('');
@@ -57,6 +58,38 @@ function StudentsPage()
     function closeModal()
     {
         setIsModalOpen(false);
+    }
+
+    async function handleDelete()
+    {
+        if (!delete_armed)
+        {
+            setDeleteArmed(true);
+            return;
+        }
+
+        setIsSaving(true);
+
+        try
+        {
+            const response = await fetch(`${API_BASE}/classes/${classId}/students/${editing_student_id}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok)
+            {
+                const data = await response.json().catch(() => ({}));
+                setError(data.error || 'Failed to delete student');
+                return;
+            }
+
+            closeModal();
+            fetchStudents();
+        }
+        finally
+        {
+            setIsSaving(false);
+        }
     }
 
     async function handleSave()
@@ -166,6 +199,17 @@ function StudentsPage()
                     onClose={closeModal}
                     footer={(
                         <>
+                            {editing_student_id !== null && (
+                                <button
+                                    className="btn btn-secondary"
+                                    style={delete_armed ? { background: 'var(--red)', color: '#fff', borderColor: 'var(--red)' } : { color: 'var(--red)' }}
+                                    onClick={handleDelete}
+                                    disabled={is_saving}
+                                >
+                                    {delete_armed ? 'Confirm Delete' : 'Delete'}
+                                </button>
+                            )}
+                            <div style={{ flex: 1 }} />
                             <button className="btn btn-secondary" onClick={closeModal}>Cancel</button>
                             <button className="btn btn-primary" onClick={handleSave} disabled={is_saving}>
                                 {is_saving ? 'Saving...' : editing_student_id === null ? 'Add Student' : 'Save Changes'}
