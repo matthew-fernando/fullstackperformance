@@ -10,32 +10,82 @@ function buildPIPrompt(selected_nodes, outcome)
         subtree: entry.subtree
     }));
 
-    return `You are helping a professor create ABET Performance Indicators (PIs) for a course.
+    return `You are helping a professor generate ABET Performance Indicators (PIs) for a course.
 
-Student Outcome: "${outcome.statement}"
-Outcome code: ${outcome.code}
+Student Outcome:
+"${outcome.statement}"
 
-The professor has selected the following nodes from their course-specific breakdown of this outcome. Each selected node, along with its ENTIRE subtree of children, should be synthesized into exactly ONE Performance Indicator.
+Outcome Code:
+"${outcome.code}"
 
-Selected nodes with full subtrees (JSON):
+The professor has selected one or more nodes from a weighted concept tree. Each selected node represents the root of a subtree that defines a measurable learning competency.
+
+Selected nodes with complete subtrees (JSON):
 ${JSON.stringify(nodes_for_prompt, null, 2)}
 
-For each selected node:
-- Write ONE Performance Indicator that represents the selected node AND everything beneath it in its subtree.
-- Give each child concept emphasis in the PI's wording proportional to its normalized_weight relative to its siblings. A child weighted much higher than its siblings should be clearly reflected in the PI; a child weighted much lower should still be mentioned, but more briefly or as a secondary consideration. Children with equal weight should receive roughly equal emphasis.
-- Go deep into nested children, not just the immediate children, when writing the PI. A grandchild with high relative weight matters just as much as a direct child with high relative weight.
-- The PI should read as ONE coherent sentence or short clause, not a list — synthesize the subtree into natural, assessable language, the way an experienced professor would describe what they are actually measuring.
+For EACH selected node, generate EXACTLY ONE Performance Indicator.
 
-Return ONLY a JSON array, no markdown formatting, no preamble, in this exact shape:
+Requirements:
+
+1. Represent the entire selected subtree.
+   - The PI must reflect the selected node AND all meaningful descendants beneath it.
+   - Do not ignore deeper descendants simply because they are several levels below the selected node.
+
+2. Use the tree hierarchy.
+   - Parent nodes describe the overall competency.
+   - Child and grandchild nodes provide the specific skills or knowledge that define that competency.
+   - Do not reduce the PI to only the deepest leaf nodes.
+
+3. Follow the normalized weights.
+   - Use normalized_weight to determine emphasis, not inclusion.
+   - Higher-weight branches should receive noticeably more emphasis.
+   - Lower-weight branches should still be acknowledged briefly.
+   - Sibling concepts with similar weights should receive similar emphasis.
+   - Do NOT give every concept equal attention.
+
+4. Synthesize rather than list.
+   - Do NOT enumerate keywords.
+   - Infer the educational competency represented by the subtree.
+   - Combine concepts naturally into one measurable learning outcome.
+
+5. Write like an experienced professor.
+   - Produce one concise Performance Indicator.
+   - Prefer 20–35 words.
+   - Avoid unnecessary adjectives or filler.
+   - Use clear, measurable educational language suitable for ABET assessment.
+
+6. Do not hallucinate.
+   - Do not introduce concepts that are not present in the subtree.
+   - If a concept is not represented in the selected subtree, do not mention it.
+
+7. Keep the highest-weight concept central.
+   - The dominant weighted branch should define the primary competency.
+   - Lower-weight branches should support that competency rather than compete with it.
+
+Good emphasis example:
+
+Weights:
+Data Structures (3)
+├── Hash Maps (2)
+└── Arrays (1)
+
+Better:
+"Students demonstrate the ability to apply fundamental data structures, particularly hash maps while recognizing related structures such as arrays."
+
+Worse:
+"Students demonstrate knowledge of arrays, hash maps, data structures, sorting, trees, and algorithms."
+
+Return ONLY a JSON array.
+
 [
   {
-    "node_id": "the node_id from input",
+    "node_id": "<node_id>",
     "code": "PI ${outcome_number}.1",
-    "title": "the performance indicator sentence"
+    "title": "<performance indicator>"
   }
 ]
 
-Number the codes sequentially starting from 1 in the order given, using the format "PI ${outcome_number}.N".`;
+Number sequentially beginning with PI ${outcome_number}.1.`;
 }
 
 function buildRubricPrompt(outcome, level_count, pi_contexts)
