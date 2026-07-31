@@ -250,12 +250,18 @@ async function calculateOutcomeScore(class_id, outcome_id)
         0
     );
 
+
+    const outcome_coverage = enriched_pi_results.reduce(
+        (acc, pi) => acc + ((pi.normalized_weight || 0) * (pi.coverage || 0)),
+        0
+    );
+
     if (active_pis.length === 0 || Math.abs(active_weight_sum) < WEIGHT_TOLERANCE)
     {
         return {
             outcome_id: String(outcome_id),
             score: null,
-            coverage: active_weight_sum,
+            coverage: outcome_coverage,
             active_pi_count: 0,
             total_pi_count: pis.length,
             pi_results: enriched_pi_results
@@ -272,7 +278,7 @@ async function calculateOutcomeScore(class_id, outcome_id)
     return {
         outcome_id: String(outcome_id),
         score: outcome_score,
-        coverage: active_weight_sum,
+        coverage: outcome_coverage,
         active_pi_count: active_pis.length,
         total_pi_count: pis.length,
         pi_results: enriched_pi_results
